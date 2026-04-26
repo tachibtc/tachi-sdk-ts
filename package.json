@@ -1,0 +1,39 @@
+{
+  "name": "@tachibtc/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for Tachi BTC daemon RPC",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "docs": "typedoc --out docs src/index.ts",
+    "test": "node --import tsx --test src/client.test.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "tachi",
+    "bitcoin",
+    "rpc",
+    "sdk"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typedoc": "^0.25.0",
+    "typescript": "^5.4.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tachibtc/tachi-sdk-ts.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

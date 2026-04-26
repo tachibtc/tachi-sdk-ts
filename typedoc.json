@@ -1,0 +1,8 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "name": "Tachi SDK",
+  "readme": "README.md",
+  "excludePrivate": true,
+  "githubPages": true
+}
