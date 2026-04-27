@@ -12,7 +12,7 @@ const config: Config = {
   },
 
   url: 'https://tachibtc.github.io',
-  baseUrl: '/tachi-sdk-ts/',
+  baseUrl: '/',
 
   organizationName: 'tachibtc',
   projectName: 'tachi-sdk-ts',
