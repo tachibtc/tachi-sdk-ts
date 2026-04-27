@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "docs": "typedoc --out docs src/index.ts",
+    "docs": "typedoc",
     "test": "node --import tsx --test src/client.test.ts",
     "prepublishOnly": "npm run build"
   },
@@ -23,7 +23,7 @@
   "devDependencies": {
     "@types/node": "^25.6.0",
     "tsx": "^4.21.0",
-    "typedoc": "^0.25.0",
+    "typedoc": "^0.28.19",
     "typescript": "^5.4.0"
   },
   "repository": {

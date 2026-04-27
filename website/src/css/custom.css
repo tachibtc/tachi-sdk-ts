@@ -1,0 +1,66 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&display=swap');
+
+:root {
+  --ifm-color-primary: #BC0000;
+  --ifm-color-primary-dark: #a80000;
+  --ifm-color-primary-darker: #9e0000;
+  --ifm-color-primary-darkest: #820000;
+  --ifm-color-primary-light: #d00000;
+  --ifm-color-primary-lighter: #da0000;
+  --ifm-color-primary-lightest: #f60000;
+  --ifm-code-font-size: 95%;
+  --ifm-font-family-base: 'Chakra Petch', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ifm-heading-font-family: 'Chakra Petch', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --docusaurus-highlighted-code-line-bg: rgba(188, 0, 0, 0.1);
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #ff4444;
+  --ifm-color-primary-dark: #ff2222;
+  --ifm-color-primary-darker: #ff1111;
+  --ifm-color-primary-darkest: #dd0000;
+  --ifm-color-primary-light: #ff6666;
+  --ifm-color-primary-lighter: #ff7777;
+  --ifm-color-primary-lightest: #ff9999;
+  --docusaurus-highlighted-code-line-bg: rgba(255, 68, 68, 0.15);
+}
+
+/* Navbar branding */
+.navbar {
+  background-color: #BC0000 !important;
+}
+
+.navbar__title,
+.navbar__link {
+  color: #ffffff !important;
+  font-family: 'Chakra Petch', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.navbar__link:hover {
+  color: #ffcccc !important;
+}
+
+.navbar__link--active {
+  color: #ffffff !important;
+}
+
+/* Footer */
+.footer--dark {
+  background-color: #1a1a1a;
+}
+
+/* Sidebar active item */
+.menu__link--active {
+  font-weight: 600;
+}
+
+/* Code blocks */
+pre {
+  border-left: 3px solid #BC0000;
+}
+
+[data-theme='dark'] pre {
+  border-left: 3px solid #ff4444;
+}

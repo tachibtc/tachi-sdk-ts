@@ -38,9 +38,13 @@ const info = await client.bitcoinRPC({ method: "getblockchaininfo" });
 console.log(info.result);
 ```
 
-## API Reference
+## Documentation
 
-Full API documentation is available at the [GitHub Pages site](https://tachibtc.github.io/tachi-sdk-ts/).
+- [Tutorial: Build Your First App](https://tachibtc.github.io/tachi-sdk-ts/tutorial.html) — Simple guide to get started
+- [API Reference](https://tachibtc.github.io/tachi-sdk-ts/) — Full TypeDoc documentation
+- [Brand Kit](https://tachibtc.github.io/tachi-sdk-ts/brand-kit.html) — Logos, colours, typography, and assets
+
+> **Note:** Transaction hex strings do **not** use a `0x` prefix (e.g. `"deadbeef"`, not `"0xdeadbeef"`).
 
 ### Methods
 
