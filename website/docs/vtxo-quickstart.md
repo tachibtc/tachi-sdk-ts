@@ -110,7 +110,7 @@ The mnemonic above is public. It exists only so this tutorial is reproducible. O
 
 A **Taurus Vault** is a P2TR (Taproot) address with a provably unusable key path (the BIP-341 NUMS point) and two script leaves:
 
-- **Cooperative leaf** — you + a 5-of-7 KDHT node quorum. No timelock, so co-signed settlement is instant.
+- **Cooperative leaf** — you + a K-of-N KDHT node quorum. No timelock, so co-signed settlement is instant.
 - **Exit leaf** — you alone, after a `1008`-block relative CSV timelock. This is your escape hatch.
 
 Add this to `vtxo.ts`:
@@ -188,7 +188,7 @@ This is the core flow. A transfer is a PSBT that spends the **cooperative leaf**
 flowchart LR
     A[buildVtxoPsbt] --> B[verifyVtxoPsbt]
     B --> C[signVtxoPsbtAsUser]
-    C --> D[KDHT 5/7 signs]
+    C --> D[KDHT K-of-N signs]
     D --> E[finalizeVtxoPsbt]
     E --> R[DEPOSIT TachiTx<br/>registers vtxoId]
     R --> W[waitForVtxoCommit]
@@ -263,12 +263,12 @@ verifyVtxoPsbt(built.psbt, vault, feeOpts);
 
 ### 2. Sign
 
-You attach your Schnorr signature; the KDHT quorum contributes theirs out-of-band to reach the 5-of-7 threshold.
+You attach your Schnorr signature; the KDHT quorum contributes theirs out-of-band to reach the K-of-N threshold.
 
 ```ts
 await signVtxoPsbtAsUser(built.psbt, userSigner, vault, feeOpts);
 
-// The 5-of-7 KDHT nodes add their tapScriptSigs here, out-of-band.
+// The KDHT node quorum adds their tapScriptSigs here, out-of-band.
 // ...
 
 finalizeVtxoPsbt(built.psbt, vault, feeOpts);
