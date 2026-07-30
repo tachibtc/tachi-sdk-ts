@@ -1,7 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { TachiClient } from "./client";
-import type { ValidatorInfo } from "./types";
 
 interface CallRecord {
   input: string;
@@ -39,33 +38,33 @@ describe("TachiClient", () => {
   });
 
   describe("getStatus", () => {
-    it("calls GET /status", async () => {
+    it("calls GET /tachi_status", async () => {
       const { client, calls } = makeClient({ id: 1, jsonrpc: "2.0", result: {} });
       await client.getStatus();
-      assert.ok(calls[0].input.endsWith("/status"));
+      assert.ok(calls[0].input.endsWith("/tachi_status"));
     });
   });
 
   describe("getPeerInfo", () => {
-    it("calls GET /peer-info", async () => {
+    it("calls GET /tachi_peerInfo", async () => {
       const { client, calls } = makeClient({ peer_id: "abc", pub_key_hex: "def", host: "127.0.0.1", p2p_port: 26656, rpc_addr: "http://localhost" });
       const result = await client.getPeerInfo();
       assert.equal(result.peer_id, "abc");
-      assert.ok(calls[0].input.endsWith("/peer-info"));
+      assert.ok(calls[0].input.endsWith("/tachi_peerInfo"));
     });
   });
 
   describe("getValidators", () => {
-    it("calls GET /validators", async () => {
+    it("calls GET /tachi_validators", async () => {
       const { client, calls } = makeClient({ count: 1, validators: [] });
       const result = await client.getValidators();
       assert.equal(result.count, 1);
-      assert.ok(calls[0].input.endsWith("/validators"));
+      assert.ok(calls[0].input.endsWith("/tachi_validators"));
     });
   });
 
   describe("getValidatorCount", () => {
-    it("calls GET /validators/count", async () => {
+    it("calls GET /tachi_validators/count", async () => {
       const { client } = makeClient({ count: 5 });
       const result = await client.getValidatorCount();
       assert.equal(result.count, 5);
@@ -73,7 +72,7 @@ describe("TachiClient", () => {
   });
 
   describe("getLiveValidators", () => {
-    it("calls GET /validators/live", async () => {
+    it("calls GET /tachi_validators/live", async () => {
       const { client } = makeClient({ count: 2, total_known: 5, validators: [] });
       const result = await client.getLiveValidators();
       assert.equal(result.count, 2);
@@ -96,23 +95,75 @@ describe("TachiClient", () => {
     });
   });
 
-  describe("registerValidator", () => {
-    it("sends POST with validator info", async () => {
-      const { client, calls } = makeClient({ status: "registered", total: 4 });
-      const info: ValidatorInfo = { peer_id: "abc", pub_key_hex: "def", host: "127.0.0.1", p2p_port: 26656, rpc_addr: "http://localhost" };
-      const result = await client.registerValidator(info);
-      assert.equal(result.status, "registered");
-      assert.equal(calls[0].init?.method, "POST");
-      const sentBody = JSON.parse(calls[0].init?.body as string);
-      assert.equal(sentBody.peer_id, "abc");
+  describe("getVtxo", () => {
+    it("passes the id as a query param", async () => {
+      const { client, calls } = makeClient({ id: "ab", owner: "cd", amount: 1000, script: "ef", height: 42, spent: false });
+      const result = await client.getVtxo("ab");
+      assert.equal(result.amount, 1000);
+      assert.ok(calls[0].input.includes("/tachi_vtxo?id=ab"));
+    });
+  });
+
+  describe("listVtxos", () => {
+    it("passes pagination params when provided", async () => {
+      const { client, calls } = makeClient({ vtxos: [], page: 2, page_size: 10, total: 0, total_pages: 0 });
+      const result = await client.listVtxos({ page: 2, page_size: 10 });
+      assert.equal(result.page, 2);
+      assert.ok(calls[0].input.includes("page=2"));
+      assert.ok(calls[0].input.includes("page_size=10"));
+    });
+
+    it("omits pagination params when not provided", async () => {
+      const { client, calls } = makeClient({ vtxos: [], page: 1, page_size: 50, total: 0, total_pages: 0 });
+      await client.listVtxos();
+      assert.ok(calls[0].input.endsWith("/tachi_listVtxos"));
+    });
+  });
+
+  describe("getAddressVtxos", () => {
+    it("requests unspent VTXOs by default", async () => {
+      const { client, calls } = makeClient({ pubkey: "ab", count: 0, vtxos: [] });
+      await client.getAddressVtxos("bcrt1p...");
+      assert.ok(calls[0].input.includes("address=bcrt1p"));
+      assert.ok(!calls[0].input.includes("include_spent"));
+    });
+
+    it("sets include_spent when requested", async () => {
+      const { client, calls } = makeClient({ pubkey: "ab", count: 0, vtxos: [] });
+      await client.getAddressVtxos("bcrt1p...", true);
+      assert.ok(calls[0].input.includes("include_spent=true"));
+    });
+  });
+
+  describe("getLockedVtxos", () => {
+    it("passes the vault as a query param", async () => {
+      const { client, calls } = makeClient({ vault: "bcrt1p", count: 0, vtxos: [] });
+      await client.getLockedVtxos("bcrt1p");
+      assert.ok(calls[0].input.includes("/tachi_vtxoLocked?vault=bcrt1p"));
+    });
+  });
+
+  describe("listVaults", () => {
+    it("passes the user and pagination params", async () => {
+      const { client, calls } = makeClient({ user: "ab", vaults: [], page: 1, page_size: 50, total: 0, total_pages: 0 });
+      await client.listVaults("bcrt1p...", { page: 3 });
+      assert.ok(calls[0].input.includes("user=bcrt1p"));
+      assert.ok(calls[0].input.includes("page=3"));
+      assert.equal(calls[0].init?.headers, undefined);
+    });
+
+    it("sends X-Api-Key when an apiKey is supplied", async () => {
+      const { client, calls } = makeClient({ user: "ab", vaults: [], page: 1, page_size: 50, total: 0, total_pages: 0 });
+      await client.listVaults("bcrt1p...", { apiKey: "secret" });
+      assert.deepEqual(calls[0].init?.headers, { "X-Api-Key": "secret" });
     });
   });
 
   describe("getNetInfo", () => {
-    it("calls GET /net-info", async () => {
+    it("calls GET /tachi_netInfo", async () => {
       const { client, calls } = makeClient({ id: 1, jsonrpc: "2.0", result: {} });
       await client.getNetInfo();
-      assert.ok(calls[0].input.endsWith("/net-info"));
+      assert.ok(calls[0].input.endsWith("/tachi_netInfo"));
     });
   });
 
@@ -121,7 +172,7 @@ describe("TachiClient", () => {
       const { client, calls } = makeClient({ id: 1, jsonrpc: "2.0", result: {} });
       await client.broadcastTxAsync("deadbeef");
       assert.equal(calls[0].init?.method, "POST");
-      assert.ok(calls[0].input.includes("/tx/broadcast/async"));
+      assert.ok(calls[0].input.includes("/tachi_txBroadcastAsync"));
       const sentBody = JSON.parse(calls[0].init?.body as string);
       assert.equal(sentBody.tx, "deadbeef");
     });
@@ -131,7 +182,7 @@ describe("TachiClient", () => {
     it("sends POST with tx hex", async () => {
       const { client, calls } = makeClient({ id: 1, jsonrpc: "2.0", result: {} });
       await client.broadcastTxSync("cafe");
-      assert.ok(calls[0].input.includes("/tx/broadcast/sync"));
+      assert.ok(calls[0].input.includes("/tachi_txBroadcastSync"));
     });
   });
 

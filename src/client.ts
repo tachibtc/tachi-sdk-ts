@@ -5,13 +5,26 @@ import type {
   ValidatorCountResponse,
   LiveValidatorsResponse,
   ReadyResponse,
-  RegisterResponse,
   CometRPCResponse,
   BroadcastTxRequest,
   BitcoinRPCRequest,
   BitcoinRPCResponse,
   QueryParams,
+  VTXOResponse,
+  ListVTXOsResponse,
+  AddressVTXOsResponse,
+  LockedVTXOsResponse,
+  ListVaultsResponse,
+  PageParams,
 } from "./types";
+
+/** Turn optional pagination options into query-string entries. */
+function pageQuery(params?: PageParams): Record<string, string> {
+  const qs: Record<string, string> = {};
+  if (params?.page !== undefined) qs.page = String(params.page);
+  if (params?.page_size !== undefined) qs.page_size = String(params.page_size);
+  return qs;
+}
 
 export interface TachiClientOptions {
   /** Base URL of the Tachi daemon RPC (e.g. "https://rpc-devnet.tachibtc.com"). */
@@ -53,14 +66,18 @@ export class TachiClient {
     return this.timeoutMs > 0 ? AbortSignal.timeout(this.timeoutMs) : undefined;
   }
 
-  private async get<T>(path: string, params?: Record<string, string>): Promise<T> {
+  private async get<T>(
+    path: string,
+    params?: Record<string, string>,
+    headers?: Record<string, string>,
+  ): Promise<T> {
     const url = new URL(path, this.baseUrl);
     if (params) {
       for (const [k, v] of Object.entries(params)) {
         if (v !== undefined) url.searchParams.set(k, v);
       }
     }
-    const res = await this.fetch(url.toString(), { signal: this.signal });
+    const res = await this.fetch(url.toString(), { signal: this.signal, headers });
     if (!res.ok) throw new Error(`GET ${path} failed: ${res.status} ${res.statusText}`);
     return res.json() as Promise<T>;
   }
@@ -85,31 +102,31 @@ export class TachiClient {
 
   /** Node info, sync status, and latest block height (via CometBFT). */
   async getStatus(): Promise<CometRPCResponse> {
-    return this.get("/status");
+    return this.get("/tachi_status");
   }
 
   // ── Peer Info ────────────────────────────────────────────────────
 
   /** PeerID, public key, and network addresses of this node. */
   async getPeerInfo(): Promise<ValidatorInfo> {
-    return this.get("/peer-info");
+    return this.get("/tachi_peerInfo");
   }
 
   // ── Validators ───────────────────────────────────────────────────
 
   /** All validators from bootstrap registry merged with KDHT-discovered validators. */
   async getValidators(): Promise<ValidatorsResponse> {
-    return this.get("/validators");
+    return this.get("/tachi_validators");
   }
 
   /** Number of validators in the bootstrap registry. */
   async getValidatorCount(): Promise<ValidatorCountResponse> {
-    return this.get("/validators/count");
+    return this.get("/tachi_validators/count");
   }
 
   /** Validators whose peers are currently connected via the overlay network. */
   async getLiveValidators(): Promise<LiveValidatorsResponse> {
-    return this.get("/validators/live");
+    return this.get("/tachi_validators/live");
   }
 
   /**
@@ -121,22 +138,78 @@ export class TachiClient {
   async waitForValidatorsReady(expected?: number): Promise<ReadyResponse> {
     const params: Record<string, string> = {};
     if (expected !== undefined) params.expected = String(expected);
-    return this.get("/validators/ready", params);
-  }
-
-  /**
-   * Register a validator with this bootstrap node.
-   * Only overwrites existing fields if the new value is non-empty.
-   */
-  async registerValidator(info: ValidatorInfo): Promise<RegisterResponse> {
-    return this.post("/validators/register", info);
+    return this.get("/tachi_validators/ready", params);
   }
 
   // ── Network ──────────────────────────────────────────────────────
 
   /** Listening addresses, connected peer count, and per-peer connection info (via CometBFT). */
   async getNetInfo(): Promise<CometRPCResponse> {
-    return this.get("/net-info");
+    return this.get("/tachi_netInfo");
+  }
+
+  // ── VTXOs ────────────────────────────────────────────────────────
+
+  /**
+   * Look up a single VTXO by its 32-byte hex ID.
+   *
+   * @param id - VTXO ID hex (64 characters).
+   */
+  async getVtxo(id: string): Promise<VTXOResponse> {
+    return this.get("/tachi_vtxo", { id });
+  }
+
+  /**
+   * List all VTXOs (unspent and spent), sorted by height descending.
+   *
+   * @param params.page - 1-based page number (default 1).
+   * @param params.page_size - Entries per page (default 50, max 100).
+   */
+  async listVtxos(params?: PageParams): Promise<ListVTXOsResponse> {
+    return this.get("/tachi_listVtxos", pageQuery(params));
+  }
+
+  /**
+   * VTXOs owned by an address or public key. Unspent only by default.
+   *
+   * @param address - Taproot address (bc1p/tb1p/bcrt1p) or public key hex (32 or 33 bytes).
+   * @param includeSpent - Include spent VTXOs (default false).
+   */
+  async getAddressVtxos(address: string, includeSpent = false): Promise<AddressVTXOsResponse> {
+    const params: Record<string, string> = { address };
+    if (includeSpent) params.include_spent = "true";
+    return this.get("/tachi_addressVtxos", params);
+  }
+
+  /**
+   * All VTXOs locked to a given vault.
+   *
+   * @param vault - Vault address (bech32m or hex).
+   */
+  async getLockedVtxos(vault: string): Promise<LockedVTXOsResponse> {
+    return this.get("/tachi_vtxoLocked", { vault });
+  }
+
+  // ── Vaults ───────────────────────────────────────────────────────
+
+  /**
+   * List vaults owned by a user.
+   *
+   * The vault reconstruction parameters (`csv_delay`, `threshold`,
+   * `quorum_keyset`, `user_key`) are redacted from the response unless
+   * `apiKey` is supplied and the daemon recognises it.
+   *
+   * @param user - Taproot address (bc1p/tb1p/bcrt1p) or public key hex (32 or 33 bytes).
+   * @param options.page - 1-based page number (default 1).
+   * @param options.page_size - Entries per page (default 50, max 100).
+   * @param options.apiKey - Sent as `X-Api-Key` to unlock reconstruction params.
+   */
+  async listVaults(
+    user: string,
+    options?: PageParams & { apiKey?: string },
+  ): Promise<ListVaultsResponse> {
+    const headers = options?.apiKey ? { "X-Api-Key": options.apiKey } : undefined;
+    return this.get("/tachi_listVaults", { user, ...pageQuery(options) }, headers);
   }
 
   // ── Transactions ─────────────────────────────────────────────────
@@ -146,7 +219,7 @@ export class TachiClient {
    * Returns immediately without waiting for CheckTx.
    */
   async broadcastTxAsync(tx: string): Promise<CometRPCResponse> {
-    return this.post("/tx/broadcast/async", { tx } satisfies BroadcastTxRequest);
+    return this.post("/tachi_txBroadcastAsync", { tx } satisfies BroadcastTxRequest);
   }
 
   /**
@@ -154,7 +227,7 @@ export class TachiClient {
    * Waits for CheckTx to complete before responding.
    */
   async broadcastTxSync(tx: string): Promise<CometRPCResponse> {
-    return this.post("/tx/broadcast/sync", { tx } satisfies BroadcastTxRequest);
+    return this.post("/tachi_txBroadcastSync", { tx } satisfies BroadcastTxRequest);
   }
 
   // ── Queries ──────────────────────────────────────────────────────
@@ -170,7 +243,7 @@ export class TachiClient {
     const qs: Record<string, string> = { path: params.path };
     if (params.data) qs.data = params.data;
     if (params.height) qs.height = params.height;
-    return this.get("/query", qs);
+    return this.get("/tachi_query", qs);
   }
 
   // ── Bitcoin RPC Proxy ────────────────────────────────────────────

@@ -219,7 +219,7 @@ const tachiTx = await signTachiTx(draft, userSigner);
 
 // Broadcast to Tachi mempool
 await broadcastTachiTx(tachiTx, {
-  url: "https://rpc-devnet.tachibtc.com/tx/broadcast/sync",
+  url: "https://rpc-devnet.tachibtc.com/tachi_txBroadcastSync",
 });
 
 console.log("\nVTXO transfer broadcast!");

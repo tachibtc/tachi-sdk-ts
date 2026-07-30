@@ -300,7 +300,7 @@ const depositDraft = buildTachiTxDeposit({
 const depositTachi = await signTachiTx(depositDraft, userSigner);
 
 await broadcastTachiTx(depositTachi, {
-  url: `${TACHI_URL}/tx/broadcast/sync`,
+  url: `${TACHI_URL}/tachi_txBroadcastSync`,
   ...insecure,
 });
 
@@ -343,7 +343,7 @@ const draft = buildTachiTxTransfer({
 const tachiTx = await signTachiTx(draft, userSigner);
 
 await broadcastTachiTx(tachiTx, {
-  url: `${TACHI_URL}/tx/broadcast/sync`,
+  url: `${TACHI_URL}/tachi_txBroadcastSync`,
   ...insecure,
 });
 
