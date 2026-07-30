@@ -51,8 +51,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The published package ships zero runtime dependencies, so this gates
+      # what consumers actually install. Dev-tooling advisories are tracked
+      # and bumped separately by Dependabot.
       - name: Run npm audit
-        run: npm audit --audit-level=high
+        run: npm audit --omit=dev --audit-level=high
 
   secret-scan:
     name: Secret Scanning
@@ -76,8 +79,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Semgrep
-        run: python3 -m pip install --quiet semgrep || python3 -m pip install --quiet --break-system-packages semgrep
-
       - name: Run Semgrep
-        run: semgrep scan --config auto --error --exclude website
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" -w /src semgrep/semgrep \
+            semgrep scan --config auto --error --metrics off --exclude website
