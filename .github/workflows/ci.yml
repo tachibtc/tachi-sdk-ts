@@ -82,4 +82,5 @@ jobs:
       - name: Run Semgrep
         run: |
           docker run --rm -v "$GITHUB_WORKSPACE:/src" -w /src semgrep/semgrep \
-            semgrep scan --config auto --error --metrics off --exclude website
+            semgrep scan --config p/typescript --config p/security-audit \
+            --error --metrics off --exclude website
