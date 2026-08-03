@@ -159,6 +159,106 @@ describe("TachiClient", () => {
     });
   });
 
+  describe("API key transport safety", () => {
+    const vaultBody = { user: "ab", vaults: [], page: 1, page_size: 50, total: 0, total_pages: 0 };
+
+    it("refuses to send an apiKey over http to a remote host", async () => {
+      const mock = createMockFetch(vaultBody);
+      const client = new TachiClient({ baseUrl: "http://daemon.example.com", fetch: mock.fn });
+      await assert.rejects(
+        () => client.listVaults("bcrt1p...", { apiKey: "secret" }),
+        /Refusing to send an API key over http/,
+      );
+      assert.equal(mock.calls.length, 0, "must not hit the network before refusing");
+    });
+
+    it("allows an apiKey over http to loopback", async () => {
+      for (const host of ["http://127.0.0.1:8080", "http://localhost:8080"]) {
+        const mock = createMockFetch(vaultBody);
+        const client = new TachiClient({ baseUrl: host, fetch: mock.fn });
+        await client.listVaults("bcrt1p...", { apiKey: "secret" });
+        assert.deepEqual(mock.calls[0].init?.headers, { "X-Api-Key": "secret" });
+      }
+    });
+
+    it("allows an apiKey over https to a remote host", async () => {
+      const mock = createMockFetch(vaultBody);
+      const client = new TachiClient({ baseUrl: "https://daemon.example.com", fetch: mock.fn });
+      await client.listVaults("bcrt1p...", { apiKey: "secret" });
+      assert.deepEqual(mock.calls[0].init?.headers, { "X-Api-Key": "secret" });
+    });
+
+    it("still allows unauthenticated calls over http to a remote host", async () => {
+      const mock = createMockFetch(vaultBody);
+      const client = new TachiClient({ baseUrl: "http://daemon.example.com", fetch: mock.fn });
+      await client.listVaults("bcrt1p...");
+      assert.equal(mock.calls.length, 1);
+    });
+  });
+
+  describe("response size limit", () => {
+    /** A Response whose body streams `size` bytes of JSON in small chunks. */
+    function streamingResponse(size: number, declaredLength?: number): Response {
+      const payload = new TextEncoder().encode(`"${"x".repeat(Math.max(size - 2, 0))}"`);
+      let sent = 0;
+      return {
+        ok: true,
+        status: 200,
+        statusText: "OK",
+        headers: { get: (k: string) => (k.toLowerCase() === "content-length" && declaredLength !== undefined ? String(declaredLength) : null) },
+        body: {
+          getReader: () => ({
+            read: async () => {
+              if (sent >= payload.byteLength) return { done: true, value: undefined };
+              const chunk = payload.subarray(sent, sent + 1024);
+              sent += chunk.byteLength;
+              return { done: false, value: chunk };
+            },
+            cancel: async () => {},
+          }),
+        },
+        json: async () => JSON.parse(new TextDecoder().decode(payload)),
+      } as unknown as Response;
+    }
+
+    it("rejects a streamed body that exceeds the cap", async () => {
+      const client = new TachiClient({
+        baseUrl: "https://example.com",
+        maxResponseBytes: 4096,
+        fetch: async () => streamingResponse(20_000),
+      });
+      await assert.rejects(() => client.getHealth(), /response too large/);
+    });
+
+    it("rejects early on an oversized content-length", async () => {
+      const client = new TachiClient({
+        baseUrl: "https://example.com",
+        maxResponseBytes: 4096,
+        fetch: async () => streamingResponse(10, 999_999),
+      });
+      await assert.rejects(() => client.getHealth(), /exceeds limit of 4096/);
+    });
+
+    it("accepts a body under the cap", async () => {
+      const client = new TachiClient({
+        baseUrl: "https://example.com",
+        maxResponseBytes: 1024 * 1024,
+        fetch: async () => streamingResponse(5000),
+      });
+      const result = await client.getHealth();
+      assert.equal(typeof result, "string");
+    });
+
+    it("skips the check when maxResponseBytes is 0", async () => {
+      const client = new TachiClient({
+        baseUrl: "https://example.com",
+        maxResponseBytes: 0,
+        fetch: async () => streamingResponse(20_000),
+      });
+      await assert.doesNotReject(() => client.getHealth());
+    });
+  });
+
   describe("getNetInfo", () => {
     it("calls GET /tachi_netInfo", async () => {
       const { client, calls } = makeClient({ id: 1, jsonrpc: "2.0", result: {} });

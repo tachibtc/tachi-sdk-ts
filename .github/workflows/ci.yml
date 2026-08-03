@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck & build
+        run: npm run build
+      - run: npm test
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # Fails the job on a high or critical advisory; moderate and below are
+      # reported by `npm audit` in the log without blocking the PR.
+      - run: npm audit --audit-level=high
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # gitleaks scans history, so it needs the full clone, not a shallow one.
+          fetch-depth: 0
+      # The gitleaks binary is MIT-licensed and free. gitleaks-action@v2 is not:
+      # it requires a paid GITLEAKS_LICENSE on organization repos, so we invoke
+      # the scanner directly instead.
+      - name: Run gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" \
+            zricethezav/gitleaks:latest detect \
+            --source=/repo --redact --verbose --no-banner
+
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      # `semgrep ci` would need a SEMGREP_APP_TOKEN; `semgrep scan` runs
+      # tokenless. --error makes any finding fail the job.
+      - run: semgrep scan --config=p/typescript --config=p/secrets --error --skip-unknown-extensions .

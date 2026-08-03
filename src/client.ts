@@ -33,6 +33,11 @@ export interface TachiClientOptions {
   fetch?: typeof globalThis.fetch;
   /** Request timeout in milliseconds (default: 30000). Set to 0 to disable. */
   timeoutMs?: number;
+  /**
+   * Maximum accepted response body size in bytes (default: 64 MiB).
+   * Set to 0 to disable the check.
+   */
+  maxResponseBytes?: number;
 }
 
 /**
@@ -51,6 +56,7 @@ export class TachiClient {
   private readonly baseUrl: string;
   private readonly fetch: typeof globalThis.fetch;
   private readonly timeoutMs: number;
+  private readonly maxResponseBytes: number;
 
   constructor(options: TachiClientOptions) {
     const parsed = new URL(options.baseUrl);
@@ -60,10 +66,76 @@ export class TachiClient {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.timeoutMs = options.timeoutMs ?? 30_000;
+    this.maxResponseBytes = options.maxResponseBytes ?? 64 * 1024 * 1024;
   }
 
   private get signal(): AbortSignal | undefined {
     return this.timeoutMs > 0 ? AbortSignal.timeout(this.timeoutMs) : undefined;
+  }
+
+  /**
+   * Guard against sending credentials in cleartext.
+   *
+   * Called before any request that carries an API key. Plain http is fine for
+   * a loopback daemon during local development, but sending the key
+   * unencrypted to a remote host would expose the vault reconstruction
+   * parameters it unlocks to anyone on the network path.
+   */
+  private assertSecureForAuth(): void {
+    const { protocol, hostname } = new URL(this.baseUrl);
+    const isLoopback =
+      hostname === "localhost" ||
+      hostname === "::1" ||
+      hostname === "[::1]" ||
+      /^127\./.test(hostname);
+    if (protocol !== "https:" && !isLoopback) {
+      throw new Error(
+        `Refusing to send an API key over ${protocol}// to non-loopback host ${hostname}; use https.`,
+      );
+    }
+  }
+
+  /**
+   * Parse a JSON response, refusing bodies larger than `maxResponseBytes`.
+   *
+   * A misbehaving or compromised daemon could otherwise return an unbounded
+   * body — e.g. a list endpoint ignoring pagination — and exhaust memory in
+   * the calling process. `Content-Length` is only a hint, so the streamed
+   * bytes are counted as they arrive.
+   */
+  private async parseJson<T>(res: Response, label: string): Promise<T> {
+    const max = this.maxResponseBytes;
+    if (max <= 0) return res.json() as Promise<T>;
+
+    const declared = Number(res.headers?.get?.("content-length"));
+    if (Number.isFinite(declared) && declared > max) {
+      throw new Error(`${label} response too large: ${declared} bytes exceeds limit of ${max}`);
+    }
+
+    // A mocked/streamless Response won't expose a body reader; fall back to json().
+    const reader = res.body?.getReader?.();
+    if (!reader) return res.json() as Promise<T>;
+
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > max) {
+        await reader.cancel();
+        throw new Error(`${label} response too large: exceeds limit of ${max} bytes`);
+      }
+      chunks.push(value);
+    }
+
+    const buf = new Uint8Array(total);
+    let offset = 0;
+    for (const c of chunks) {
+      buf.set(c, offset);
+      offset += c.byteLength;
+    }
+    return JSON.parse(new TextDecoder().decode(buf)) as T;
   }
 
   private async get<T>(
@@ -79,7 +151,7 @@ export class TachiClient {
     }
     const res = await this.fetch(url.toString(), { signal: this.signal, headers });
     if (!res.ok) throw new Error(`GET ${path} failed: ${res.status} ${res.statusText}`);
-    return res.json() as Promise<T>;
+    return this.parseJson<T>(res, `GET ${path}`);
   }
 
   private async post<T>(path: string, body?: unknown): Promise<T> {
@@ -90,7 +162,7 @@ export class TachiClient {
       signal: this.signal,
     });
     if (!res.ok) throw new Error(`POST ${path} failed: ${res.status} ${res.statusText}`);
-    return res.json() as Promise<T>;
+    return this.parseJson<T>(res, `POST ${path}`);
   }
 
   // ── Health & Status ──────────────────────────────────────────────
@@ -203,12 +275,18 @@ export class TachiClient {
    * @param options.page - 1-based page number (default 1).
    * @param options.page_size - Entries per page (default 50, max 100).
    * @param options.apiKey - Sent as `X-Api-Key` to unlock reconstruction params.
+   *   Requires an https `baseUrl` unless the daemon is on loopback.
+   * @throws If `apiKey` is set and `baseUrl` is plain http to a non-loopback host.
    */
   async listVaults(
     user: string,
     options?: PageParams & { apiKey?: string },
   ): Promise<ListVaultsResponse> {
-    const headers = options?.apiKey ? { "X-Api-Key": options.apiKey } : undefined;
+    let headers: Record<string, string> | undefined;
+    if (options?.apiKey) {
+      this.assertSecureForAuth();
+      headers = { "X-Api-Key": options.apiKey };
+    }
     return this.get("/tachi_listVaults", { user, ...pageQuery(options) }, headers);
   }
 
