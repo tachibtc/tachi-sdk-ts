@@ -327,6 +327,17 @@ describe("TachiClient", () => {
   });
 
   describe("error handling", () => {
+    /** A non-OK Response whose body carries the daemon's explanation. */
+    function errorResponse(status: number, body: string): Response {
+      return {
+        ok: false,
+        status,
+        statusText: status === 400 ? "Bad Request" : "Error",
+        text: async () => body,
+        json: async () => ({}),
+      } as unknown as Response;
+    }
+
     it("throws on non-OK GET responses", async () => {
       const { client } = makeClient({}, 500);
       await assert.rejects(() => client.getHealth(), /GET \/health failed: 500/);
@@ -335,6 +346,88 @@ describe("TachiClient", () => {
     it("throws on non-OK POST responses", async () => {
       const { client } = makeClient({}, 404);
       await assert.rejects(() => client.broadcastTxSync("abc"), /POST .* failed: 404/);
+    });
+
+    it("includes the daemon's error body in GET failures", async () => {
+      const detail = 'address "bc1q..." is not a taproot (P2TR) address — use a bc1p address';
+      const client = new TachiClient({
+        baseUrl: "https://example.com",
+        fetch: async () => errorResponse(400, detail),
+      });
+      await assert.rejects(
+        () => client.getAddressVtxos("bc1q..."),
+        (e: Error) => {
+          assert.match(e.message, /GET \/tachi_addressVtxos failed: 400 Bad Request/);
+          assert.match(e.message, /is not a taproot \(P2TR\) address/);
+          return true;
+        },
+      );
+    });
+
+    it("includes the daemon's error body in POST failures", async () => {
+      const client = new TachiClient({
+        baseUrl: "https://example.com",
+        fetch: async () => errorResponse(400, "missing tx field"),
+      });
+      await assert.rejects(() => client.broadcastTxSync("abc"), /400 Bad Request — missing tx field/);
+    });
+
+    it("truncates a very long error body", async () => {
+      const client = new TachiClient({
+        baseUrl: "https://example.com",
+        fetch: async () => errorResponse(500, "x".repeat(5000)),
+      });
+      await assert.rejects(() => client.getHealth(), (e: Error) => {
+        assert.ok(e.message.length < 700, `message not truncated: ${e.message.length} chars`);
+        assert.ok(e.message.endsWith("…"));
+        return true;
+      });
+    });
+
+    it("falls back to the status line when the body is unreadable", async () => {
+      const client = new TachiClient({
+        baseUrl: "https://example.com",
+        fetch: async () =>
+          ({
+            ok: false,
+            status: 502,
+            statusText: "Bad Gateway",
+            text: async () => {
+              throw new Error("stream already consumed");
+            },
+          }) as unknown as Response,
+      });
+      await assert.rejects(() => client.getHealth(), /GET \/health failed: 502 Bad Gateway$/);
+    });
+
+    it("tags timeouts with the endpoint and host", async () => {
+      const client = new TachiClient({
+        baseUrl: "https://daemon.example.com",
+        timeoutMs: 5,
+        fetch: async () => {
+          const err = new Error("The operation was aborted due to timeout");
+          err.name = "TimeoutError";
+          throw err;
+        },
+      });
+      await assert.rejects(() => client.getHealth(), (e: Error) => {
+        assert.match(e.message, /GET \/health timed out after 5ms \(daemon\.example\.com\)/);
+        assert.equal((e.cause as Error).name, "TimeoutError");
+        return true;
+      });
+    });
+
+    it("tags non-timeout transport failures with the endpoint", async () => {
+      const client = new TachiClient({
+        baseUrl: "https://daemon.example.com",
+        fetch: async () => {
+          throw new TypeError("fetch failed");
+        },
+      });
+      await assert.rejects(
+        () => client.broadcastTxSync("ab"),
+        /POST \/tachi_txBroadcastSync request failed: fetch failed \(daemon\.example\.com\)/,
+      );
     });
   });
 

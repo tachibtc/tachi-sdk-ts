@@ -10,6 +10,8 @@ npm install @tachibtc/sdk
 
 ## Quick Start
 
+> **Endpoint paths:** every daemon route is namespaced under `tachi_` (e.g. `GET /tachi_status`) except `/health` and the Bitcoin JSON-RPC proxy at `POST /`. If you hand-roll `fetch` calls alongside the SDK, unprefixed paths will 404.
+
 ```ts
 import { TachiClient } from "@tachibtc/sdk";
 
@@ -75,6 +77,31 @@ console.log(info.result);
 | `bitcoinRPC(request)` | `POST /` | Bitcoin JSON-RPC proxy |
 
 > **Note:** every endpoint except `/health` and the Bitcoin RPC proxy is namespaced under `tachi_`. SDK versions before 0.2.0 used unprefixed paths and will 404 against current daemons.
+
+### Client options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `baseUrl` | `string` | — | Base URL of the Tachi daemon RPC |
+| `fetch` | `fetch` | `globalThis.fetch` | Custom fetch implementation |
+| `timeoutMs` | `number` | `30000` | Per-request timeout in ms. `0` disables |
+| `maxResponseBytes` | `number` | `67108864` (64 MiB) | Reject responses larger than this. `0` disables |
+
+### Errors
+
+Failed requests reject with the daemon's own explanation appended, not just the status line:
+
+```
+GET /tachi_addressVtxos failed: 400 Bad Request — address "bc1q…" is not a taproot (P2TR) address — use a raw pubkey hex or a bc1p/tb1p/bcrt1p address
+```
+
+Timeouts and transport failures name the endpoint and host, and keep the original error as `cause`:
+
+```
+GET /health timed out after 30000ms (rpc-devnet.tachibtc.com)
+```
+
+> **A resolved promise is not always success.** `query()`, `broadcastTxAsync()`, `broadcastTxSync()`, and `bitcoinRPC()` pass through protocols that report failures *inside* an HTTP 200. Check `result.response.code` / `result.code` (with `result.log`) for the CometBFT calls, and `error !== null` for `bitcoinRPC()`. Only HTTP-level failures reject.
 
 Validator registration (`POST /tachi_validators/register`) is intentionally **not** exposed by the SDK. It requires a BIP-340 Schnorr signature over a canonical digest whose construction the daemon's OpenAPI spec doesn't describe, so the SDK can't build a correct request. Call the endpoint directly until that's documented.
 

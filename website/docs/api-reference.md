@@ -23,6 +23,25 @@ const client = new TachiClient({
 | `baseUrl` | `string` | — | Base URL of the Tachi daemon RPC |
 | `fetch` | `fetch` | `globalThis.fetch` | Custom fetch implementation |
 | `timeoutMs` | `number` | `30000` | Request timeout in ms. Set to `0` to disable |
+| `maxResponseBytes` | `number` | `67108864` (64 MiB) | Reject responses larger than this. Set to `0` to disable |
+
+## Errors
+
+Failed requests reject with the daemon's own explanation appended, not just the status line:
+
+```
+GET /tachi_addressVtxos failed: 400 Bad Request — address "bc1q…" is not a taproot (P2TR) address — use a raw pubkey hex or a bc1p/tb1p/bcrt1p address
+```
+
+Timeouts and transport failures name the endpoint and host, and keep the original error as `cause`:
+
+```
+GET /health timed out after 30000ms (rpc-devnet.tachibtc.com)
+```
+
+:::caution
+A resolved promise is not always success. `query()`, `broadcastTxAsync()`, `broadcastTxSync()`, and `bitcoinRPC()` pass through protocols that report failures *inside* an HTTP 200 — check `result.response.code` / `result.code` (with `result.log`) for the CometBFT calls, and `error !== null` for `bitcoinRPC()`. Only HTTP-level failures reject.
+:::
 
 ---
 

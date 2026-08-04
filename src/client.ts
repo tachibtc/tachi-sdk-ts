@@ -18,6 +18,9 @@ import type {
   PageParams,
 } from "./types";
 
+/** Cap on how much of a daemon error body is quoted back in a thrown Error. */
+const ERROR_BODY_MAX_CHARS = 500;
+
 /** Turn optional pagination options into query-string entries. */
 function pageQuery(params?: PageParams): Record<string, string> {
   const qs: Record<string, string> = {};
@@ -138,6 +141,47 @@ export class TachiClient {
     return JSON.parse(new TextDecoder().decode(buf)) as T;
   }
 
+  /**
+   * Perform the fetch, tagging transport failures with the endpoint involved.
+   *
+   * A bare `TimeoutError` says nothing about which of the client's calls
+   * stalled, which is painful to debug in a process making many requests. The
+   * original error is preserved as `cause`.
+   */
+  private async request(url: string, init: RequestInit, label: string): Promise<Response> {
+    try {
+      return await this.fetch(url, init);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      const name = err instanceof Error ? err.name : "Error";
+      const timedOut = name === "TimeoutError" || name === "AbortError";
+      const what = timedOut ? `timed out after ${this.timeoutMs}ms` : `request failed: ${reason}`;
+      throw new Error(`${label} ${what} (${new URL(this.baseUrl).host})`, { cause: err });
+    }
+  }
+
+  /**
+   * Build the error for a non-2xx response, including the daemon's own message.
+   *
+   * The daemon explains validation failures in the response body — e.g. why an
+   * address isn't taproot — and that text is far more useful than the bare
+   * status line. The body is truncated so a huge error page can't blow up the
+   * message, and any failure to read it is swallowed: we must not mask the
+   * original HTTP error with a decoding error.
+   */
+  private async httpError(res: Response, label: string): Promise<Error> {
+    let detail = "";
+    try {
+      const text = await res.text();
+      detail = text.trim().slice(0, ERROR_BODY_MAX_CHARS);
+      if (text.trim().length > ERROR_BODY_MAX_CHARS) detail += "…";
+    } catch {
+      // Body unreadable or already consumed — fall back to the status line.
+    }
+    const base = `${label} failed: ${res.status} ${res.statusText}`;
+    return new Error(detail ? `${base} — ${detail}` : base);
+  }
+
   private async get<T>(
     path: string,
     params?: Record<string, string>,
@@ -149,19 +193,23 @@ export class TachiClient {
         if (v !== undefined) url.searchParams.set(k, v);
       }
     }
-    const res = await this.fetch(url.toString(), { signal: this.signal, headers });
-    if (!res.ok) throw new Error(`GET ${path} failed: ${res.status} ${res.statusText}`);
+    const res = await this.request(url.toString(), { signal: this.signal, headers }, `GET ${path}`);
+    if (!res.ok) throw await this.httpError(res, `GET ${path}`);
     return this.parseJson<T>(res, `GET ${path}`);
   }
 
   private async post<T>(path: string, body?: unknown): Promise<T> {
-    const res = await this.fetch(new URL(path, this.baseUrl).toString(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: this.signal,
-    });
-    if (!res.ok) throw new Error(`POST ${path} failed: ${res.status} ${res.statusText}`);
+    const res = await this.request(
+      new URL(path, this.baseUrl).toString(),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: this.signal,
+      },
+      `POST ${path}`,
+    );
+    if (!res.ok) throw await this.httpError(res, `POST ${path}`);
     return this.parseJson<T>(res, `POST ${path}`);
   }
 
@@ -191,7 +239,12 @@ export class TachiClient {
     return this.get("/tachi_validators");
   }
 
-  /** Number of validators in the bootstrap registry. */
+  /**
+   * Number of validators in the bootstrap registry.
+   *
+   * Registry-only — this counts fewer validators than the live network has.
+   * Use `getValidators().count` for the merged registry + KDHT-discovered view.
+   */
   async getValidatorCount(): Promise<ValidatorCountResponse> {
     return this.get("/tachi_validators/count");
   }
@@ -295,6 +348,10 @@ export class TachiClient {
   /**
    * Broadcast a hex-encoded transaction asynchronously.
    * Returns immediately without waiting for CheckTx.
+   *
+   * **A resolved promise does not mean the transaction was accepted.** This
+   * returns before CheckTx runs at all. Check `result.code === 0` and read
+   * `result.log`; a rejection only signals an HTTP-level failure.
    */
   async broadcastTxAsync(tx: string): Promise<CometRPCResponse> {
     return this.post("/tachi_txBroadcastAsync", { tx } satisfies BroadcastTxRequest);
@@ -303,6 +360,11 @@ export class TachiClient {
   /**
    * Broadcast a hex-encoded transaction synchronously.
    * Waits for CheckTx to complete before responding.
+   *
+   * **A resolved promise does not mean the transaction was accepted.** A
+   * CheckTx failure comes back as HTTP 200 with a non-zero `result.code` and
+   * an explanatory `result.log`, so inspect those rather than relying on the
+   * promise resolving.
    */
   async broadcastTxSync(tx: string): Promise<CometRPCResponse> {
     return this.post("/tachi_txBroadcastSync", { tx } satisfies BroadcastTxRequest);
@@ -312,6 +374,10 @@ export class TachiClient {
 
   /**
    * Forward a query to the CometBFT ABCI application.
+   *
+   * **A resolved promise does not mean the query succeeded.** CometBFT reports
+   * ABCI failures as HTTP 200 with `result.response.code !== 0` and a `log`
+   * field (e.g. `"unknown path: /store/key"`), so check those explicitly.
    *
    * @param params.path  - ABCI query path (required).
    * @param params.data  - Hex-encoded query data.
@@ -328,6 +394,10 @@ export class TachiClient {
 
   /**
    * Forward a JSON-RPC 1.0 request to the underlying bitcoind.
+   *
+   * **A resolved promise does not mean the call succeeded.** JSON-RPC reports
+   * failures in the body, so check that `error` is `null` before trusting
+   * `result`.
    *
    * **Security warning:** This proxies any Bitcoin RPC method, including
    * privileged ones (e.g. `sendtoaddress`, `dumpprivkey`, `stop`).
