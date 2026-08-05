@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: Build & Test
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check and build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+  dependency-audit:
+    name: Dependency Vulnerability Audit
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The published package ships zero runtime dependencies, so this gates
+      # what consumers actually install. Dev-tooling advisories are tracked
+      # and bumped separately by Dependabot.
+      - name: Run npm audit
+        run: npm audit --omit=dev --audit-level=high
+
+  secret-scan:
+    name: Secret Scanning
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        run: |
+          VERSION="8.18.2"
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" | tar -xz -C "$RUNNER_TEMP"
+          "$RUNNER_TEMP/gitleaks" detect --source . --verbose --redact --no-banner
+
+  semgrep:
+    name: Semgrep SAST
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        run: |
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" -w /src semgrep/semgrep \
+            semgrep scan --config p/typescript --config p/security-audit \
+            --error --metrics off --exclude website
