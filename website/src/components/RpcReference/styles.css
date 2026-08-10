@@ -1,0 +1,480 @@
+@import url("https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap");
+
+.rpc-ref-scope {
+  --bg: var(--ifm-background-color);
+  --bg-elev-1: var(--ifm-background-surface-color);
+  --bg-elev-2: var(--ifm-background-surface-color);
+  --bg-card: var(--ifm-background-surface-color);
+  --bg-card-hover: var(--ifm-hover-overlay, var(--ifm-color-emphasis-200));
+
+  --border: var(--ifm-color-emphasis-300);
+  --border-strong: var(--ifm-color-emphasis-400);
+
+  --red-deep: #5a0008;
+  --red-dark: #8c0000;
+  --red: var(--ifm-color-primary);
+  --red-bright: var(--ifm-color-primary-light);
+  --red-accent: var(--ifm-color-primary);
+
+  --text: var(--ifm-font-color-base);
+  --text-muted: var(--ifm-color-emphasis-700);
+  --text-dim: var(--ifm-color-emphasis-600);
+
+  --font-display: "Chakra Petch", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Space Mono", monospace;
+
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+}
+
+main:has(.rpc-ref-page) .pagination-nav {
+  padding: 12px 24px;
+}
+
+main:has(.rpc-ref-page) .theme-doc-footer {
+  padding: 12px 24px;
+}
+
+.rpc-ref-page {
+  display: flex;
+  flex-direction: column;
+}
+.rpc-ref-page > header,
+.rpc-ref-page > h1,
+.rpc-ref-page > p {
+  padding: 0 24px;
+}
+
+.rpc-ref-scope,
+.rpc-ref-scope * {
+  box-sizing: border-box;
+}
+
+.rpc-ref-scope ::selection {
+  background: var(--red);
+  color: #fff;
+}
+
+.rpc-ref-scope code,
+.rpc-ref-scope pre {
+  font-family: var(--font-mono);
+}
+
+.rpc-ref-scope button,
+.rpc-ref-scope input,
+.rpc-ref-scope select,
+.rpc-ref-scope textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+.rpc-ref-scope .reference-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+
+.rpc-ref-scope .reference-title {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.rpc-ref-scope .reference-version {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.rpc-ref-scope .server-select {
+  margin-left: auto;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.rpc-ref-scope .reference-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.rpc-ref-scope .method-tag,
+.rpc-ref-scope .method-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+
+.rpc-ref-scope .method-badge {
+  font-size: 13px;
+  padding: 4px 10px;
+}
+
+.rpc-ref-scope .method-get {
+  color: #4ade80;
+  border: 1px solid #4ade80;
+}
+.rpc-ref-scope .method-post {
+  color: var(--red-bright);
+  border: 1px solid var(--red-bright);
+}
+.rpc-ref-scope .method-put,
+.rpc-ref-scope .method-patch {
+  color: #fbbf24;
+  border: 1px solid #fbbf24;
+}
+.rpc-ref-scope .method-delete {
+  color: #f87171;
+  border: 1px solid #f87171;
+}
+
+.rpc-ref-scope .reference-main {
+  flex: 1;
+  padding: 32px 40px;
+  min-width: 0;
+}
+
+.rpc-ref-scope .reference-empty {
+  color: var(--text-dim);
+}
+
+.rpc-ref-scope .endpoint-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.rpc-ref-scope .endpoint-path {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.rpc-ref-scope h1 {
+  font-size: 24px;
+  margin: 0 0 8px;
+}
+
+.rpc-ref-scope h2 {
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-dim);
+  margin: 28px 0 12px;
+  font-family: var(--font-mono);
+}
+
+.rpc-ref-scope .endpoint-description {
+  color: var(--text-muted);
+  max-width: 720px;
+}
+
+.rpc-ref-scope .endpoint-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(340px, 1fr);
+  gap: 40px;
+  align-items: start;
+}
+
+.rpc-ref-scope .params-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rpc-ref-scope .params-table th,
+.rpc-ref-scope .params-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.rpc-ref-scope .params-table th {
+  color: var(--text-dim);
+  font-weight: 400;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.rpc-ref-scope .param-input {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 0;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+.rpc-ref-scope .param-input:focus {
+  outline: none;
+  border-color: var(--red);
+}
+
+.rpc-ref-scope .schema-required {
+  font-size: 9px;
+  color: var(--red-bright);
+  border: 1px solid var(--red-bright);
+  padding: 1px 4px;
+  margin-left: 6px;
+  text-transform: uppercase;
+}
+
+.rpc-ref-scope .schema-fields {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.rpc-ref-scope .schema-field {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.rpc-ref-scope .schema-field:last-child {
+  border-bottom: none;
+}
+
+.rpc-ref-scope .schema-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.rpc-ref-scope .schema-field-row.expandable {
+  cursor: pointer;
+}
+
+.rpc-ref-scope .schema-toggle {
+  color: var(--text-dim);
+  width: 10px;
+}
+
+.rpc-ref-scope .schema-field-name {
+  font-family: var(--font-mono);
+  color: var(--text);
+}
+
+.rpc-ref-scope .schema-type {
+  margin-left: auto;
+  color: var(--red-accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.rpc-ref-scope .schema-field-desc {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.rpc-ref-scope .schema-nested {
+  margin-top: 8px;
+  margin-left: 16px;
+}
+
+.rpc-ref-scope .schema-array {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rpc-ref-scope .response-block {
+  margin-bottom: 16px;
+}
+
+.rpc-ref-scope .response-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.rpc-ref-scope .status-pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
+
+.rpc-ref-scope .status-2xx {
+  color: #4ade80;
+  border: 1px solid #4ade80;
+}
+.rpc-ref-scope .status-3xx {
+  color: #60a5fa;
+  border: 1px solid #60a5fa;
+}
+.rpc-ref-scope .status-4xx,
+.rpc-ref-scope .status-5xx {
+  color: var(--red-bright);
+  border: 1px solid var(--red-bright);
+}
+
+.rpc-ref-scope .endpoint-side {
+  position: sticky;
+  top: 0;
+}
+
+.rpc-ref-scope .code-samples {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  margin-bottom: 24px;
+}
+
+.rpc-ref-scope .code-samples-tabs {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.rpc-ref-scope .code-tab {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+.rpc-ref-scope .code-tab.active {
+  color: var(--red-bright);
+  border-bottom: 2px solid var(--red-bright);
+}
+
+.rpc-ref-scope .code-copy {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+.rpc-ref-scope .code-copy:hover {
+  color: var(--red-bright);
+}
+
+.rpc-ref-scope .code-samples-body {
+  margin: 0;
+  padding: 14px;
+  font-size: 12px;
+  height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.rpc-ref-scope .tryit {
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  padding: 14px;
+}
+
+.rpc-ref-scope .tryit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.rpc-ref-scope .tryit-server {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.rpc-ref-scope .btn-primary {
+  margin-left: auto;
+  background: var(--red);
+  color: #fff;
+  border: none;
+  padding: 7px 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.rpc-ref-scope .btn-primary:hover {
+  background: var(--red-bright);
+}
+
+.rpc-ref-scope .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.rpc-ref-scope .tryit-body {
+  width: 100%;
+  height: 180px;
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin-bottom: 10px;
+  resize: vertical;
+  overflow: auto;
+}
+
+.rpc-ref-scope .tryit-body:focus {
+  outline: none;
+  border-color: var(--red);
+}
+
+.rpc-ref-scope .tryit-error {
+  color: var(--red-bright);
+  font-size: 13px;
+}
+
+.rpc-ref-scope .tryit-result-head {
+  display: flex;
+  align-items: center;
+}
+
+.rpc-ref-scope .tryit-result pre {
+  background: var(--bg-elev-1);
+  border: 1px solid var(--border);
+  padding: 10px;
+  margin: 8px 0 0;
+  font-size: 12px;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (max-width: 900px) {
+  .rpc-ref-scope .endpoint-columns {
+    grid-template-columns: 1fr;
+  }
+}
