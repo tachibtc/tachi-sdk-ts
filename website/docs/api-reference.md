@@ -172,7 +172,17 @@ console.log(ready.ready); // true or false
 
 ### Validator registration
 
-`POST /tachi_validators/register` is **not** exposed by the SDK. The daemon requires a BIP-340 Schnorr signature over a canonical register digest whose construction isn't described by the OpenAPI spec, so the SDK can't build a correct request. Call the endpoint directly until that's documented.
+`POST /tachi_validators/register` is **not** exposed by the SDK, and deliberately stays that way.
+
+:::warning Deliberate exclusion, not a coverage gap
+This is a bootstrap-node-internal endpoint for validators joining the network. Its allowlist and signature checks exist to prevent registration-flood abuse, and a convenient SDK wrapper would invite exactly that. Please don't add it in a future "complete the coverage" pass.
+:::
+
+Operators who legitimately need it should call it directly. The signature is BIP-340 Schnorr over:
+
+```
+sha256("tachi-register-v1\n" + lowercase(pub_key_hex) + "\n" + peer_id + "\n" + host + "\n" + p2p_port + "\n" + rpc_addr + "\n" + timestamp)
+```
 
 ---
 

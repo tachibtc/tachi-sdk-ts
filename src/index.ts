@@ -52,6 +52,8 @@ export type {
   WatchtowerStatus,
   RefundInput,
   RefundOutput,
+  TapLeafScript,
+  TapScriptSig,
   RefundTx,
   SignTransactionResponse,
   WatchFilters,

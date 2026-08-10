@@ -41,10 +41,15 @@ export interface ReadyResponse {
 /**
  * Response from /tachi_validators/register.
  *
- * The SDK has no method for this endpoint: registration requires a BIP-340
- * Schnorr signature over a canonical digest whose construction is not
- * described by the daemon's OpenAPI spec. Call it directly until that is
- * documented.
+ * The SDK deliberately has no method for this endpoint. It is a
+ * bootstrap-node-internal route for validators joining the network, and its
+ * allowlist and signature checks exist to prevent registration-flood abuse —
+ * a convenient wrapper would invite exactly that. This is an intentional
+ * exclusion, not a coverage gap; please don't add one.
+ *
+ * Operators calling it directly sign, with BIP-340 Schnorr, the digest:
+ * sha256("tachi-register-v1\n" + lowercase(pub_key_hex) + "\n" + peer_id +
+ * "\n" + host + "\n" + p2p_port + "\n" + rpc_addr + "\n" + timestamp)
  */
 export interface RegisterResponse {
   status: string;
@@ -484,12 +489,37 @@ export interface WatchtowerStatus {
 
 /** A refund transaction input awaiting signatures. */
 export interface RefundInput {
-  [key: string]: unknown;
+  /** The outpoint being spent. */
+  prevout: { hash: string; index: number };
+  sequence: number;
+  /** Value and script of the output being spent. */
+  witnessUtxo: { value: number; script: string };
+  tapLeafScript: TapLeafScript[];
+  /** Hex x-only internal key. */
+  tapInternalKey: string;
+  sighashType: number;
+  /** Signatures already collected for this input. */
+  tapScriptSig?: TapScriptSig[];
+}
+
+/** A taproot leaf script and its control block. */
+export interface TapLeafScript {
+  leafVersion: number;
+  script: string;
+  controlBlock: string;
+}
+
+/** A taproot script-path signature. */
+export interface TapScriptSig {
+  pubkey: string;
+  leafHash: string;
+  signature: string;
 }
 
 /** A refund transaction output. */
 export interface RefundOutput {
-  [key: string]: unknown;
+  value: number;
+  script: string;
 }
 
 /** Request body for /tachi_signTransaction. */

@@ -168,7 +168,15 @@ GET /health timed out after 30000ms (rpc-devnet.tachibtc.com)
 
 > **A resolved promise is not always success.** `query()`, `broadcastTxAsync()`, `broadcastTxSync()`, and `bitcoinRPC()` pass through protocols that report failures *inside* an HTTP 200. Check `result.response.code` / `result.code` (with `result.log`) for the CometBFT calls, and `error !== null` for `bitcoinRPC()`. Only HTTP-level failures reject.
 
-Validator registration (`POST /tachi_validators/register`) is intentionally **not** exposed by the SDK. It requires a BIP-340 Schnorr signature over a canonical digest whose construction the daemon's OpenAPI spec doesn't describe, so the SDK can't build a correct request. Call the endpoint directly until that's documented.
+Validator registration (`POST /tachi_validators/register`) is intentionally **not** exposed by the SDK, and deliberately stays that way.
+
+It is a bootstrap-node-internal endpoint for validators joining the network. Its allowlist and signature checks exist to prevent registration-flood abuse, and shipping a convenient SDK wrapper would invite exactly that. This is a deliberate exclusion, not a coverage gap — please don't add it in a future "complete the coverage" pass.
+
+Operators who legitimately need it should call it directly. The signature is BIP-340 Schnorr over:
+
+```
+sha256("tachi-register-v1\n" + lowercase(pub_key_hex) + "\n" + peer_id + "\n" + host + "\n" + p2p_port + "\n" + rpc_addr + "\n" + timestamp)
+```
 
 `listVaults` redacts each vault's reconstruction parameters (`csv_delay`, `threshold`, `quorum_keyset`, `user_key`) unless you pass an `apiKey`:
 
