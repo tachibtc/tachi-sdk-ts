@@ -128,6 +128,14 @@ Leaving the loop by any means (`break`, `return`, throw, or aborting the signal)
 
 This uses the global `WebSocket`, which Node provides natively from **v22** — hence this package's `engines` floor. To run on an older runtime or supply a browser/test implementation, pass `options.WebSocket`.
 
+**Backpressure.** Events arriving while your loop body is busy are buffered, bounded by `maxQueuedEvents` (default 10,000). Past that the stream throws rather than growing without limit — a consumer that can't keep up is a real problem, and silently dropping events would hide it as a gap that looks like the daemon never sent them. Buffered events are still delivered before the error surfaces. Set to `0` to disable the bound.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `signal` | `AbortSignal` | — | Abort to stop the stream and close the socket |
+| `WebSocket` | `typeof WebSocket` | `globalThis.WebSocket` | Custom implementation |
+| `maxQueuedEvents` | `number` | `10000` | Buffer bound; `0` disables |
+
 ### Slow endpoints
 
 `getAddressTransactions()` and `listTransactions()` are **full-chain scans** — the daemon has no address index and walks every block. On a ~115k-block regtest chain, fetching an address with 2 matching transactions took ~17 seconds, and `listTransactions()` with no `pageSize` exceeded an 8-second timeout.

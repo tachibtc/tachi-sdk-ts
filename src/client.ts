@@ -782,11 +782,27 @@ export class TachiClient {
    * }
    * ```
    *
-   * @throws If no filter is set, or if no WebSocket implementation is available.
+   * Events arriving while the consumer is between iterations are buffered, up
+   * to `options.maxQueuedEvents` (default 10,000). Past that the stream fails
+   * rather than growing without bound — see the option's docs.
+   *
+   * @throws If no filter is set, if no WebSocket implementation is available,
+   *   or if the consumer falls more than `maxQueuedEvents` behind.
    */
   async *watch(
     filters: WatchFilters,
-    options?: { signal?: AbortSignal; WebSocket?: typeof globalThis.WebSocket },
+    options?: {
+      signal?: AbortSignal;
+      WebSocket?: typeof globalThis.WebSocket;
+      /**
+       * Maximum events buffered while the consumer is busy (default 10,000).
+       * Exceeding it throws, since a consumer that can't keep up is a real
+       * problem and silently dropping events would hide it. Set to 0 to
+       * disable the bound — only safe if you trust the daemon and know your
+       * loop body outpaces event arrival.
+       */
+      maxQueuedEvents?: number;
+    },
   ): AsyncGenerator<TachiEvent, void, undefined> {
     const qs = new URLSearchParams();
     if (filters.address) qs.set("address", filters.address);
@@ -814,7 +830,11 @@ export class TachiClient {
 
     const socket = new Impl(url.toString());
     // Buffer events that arrive while the consumer is between iterations, so a
-    // slow loop body drops nothing.
+    // slow loop body drops nothing — but bound it. An unbounded queue would
+    // grow without limit whenever the consumer falls behind arrival rate,
+    // which needs no malice on a busy chain, and lets a hostile daemon exhaust
+    // memory by flooding. Same reasoning as `maxResponseBytes` for HTTP.
+    const maxQueued = options?.maxQueuedEvents ?? 10_000;
     const queue: TachiEvent[] = [];
     let notify: (() => void) | undefined;
     let closed = false;
@@ -831,6 +851,18 @@ export class TachiClient {
     };
 
     socket.onmessage = (ev: MessageEvent) => {
+      if (maxQueued > 0 && queue.length >= maxQueued) {
+        // Fail loudly rather than dropping silently: a consumer that can't keep
+        // up is a real problem, and silently discarding events would make the
+        // resulting gap look like the daemon never sent them.
+        stop(
+          new Error(
+            `watch: event queue exceeded ${maxQueued} entries; the consumer is falling behind. ` +
+              "Process events faster, or raise options.maxQueuedEvents.",
+          ),
+        );
+        return;
+      }
       try {
         queue.push(JSON.parse(String(ev.data)) as TachiEvent);
       } catch {

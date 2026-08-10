@@ -577,6 +577,16 @@ Transaction alerts arrive **twice** — `state: "pending"` on CheckTx acceptance
 
 Leaving the loop by any means closes the socket — no separate teardown call.
 
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `signal` | `AbortSignal` | — | Abort to stop the stream and close the socket |
+| `WebSocket` | `typeof WebSocket` | `globalThis.WebSocket` | Custom implementation |
+| `maxQueuedEvents` | `number` | `10000` | Buffer bound while the consumer is busy; `0` disables |
+
 :::caution Node 22+
 Uses the global `WebSocket`, native in Node from v22 (this package's `engines` floor). Pass `options.WebSocket` to supply your own implementation for older runtimes, browsers, or tests.
+:::
+
+:::note Backpressure
+Events arriving between iterations are buffered up to `maxQueuedEvents`. Past that the stream throws rather than growing without bound — mirroring `maxResponseBytes` for HTTP responses. Already-buffered events are delivered before the error surfaces, so nothing legitimately received is discarded.
 :::

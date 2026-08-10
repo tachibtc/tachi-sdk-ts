@@ -684,6 +684,55 @@ describe("TachiClient", () => {
       await it.return(undefined);
     });
 
+    it("bounds the queue when the consumer falls behind", async () => {
+      // Sustained delivery against a consumer that never drains: the queue must
+      // stop growing and fail loudly rather than expanding without limit.
+      const { Fake, instances } = fakeSocket([]);
+      const client = new TachiClient({ baseUrl: "https://example.com" });
+      const it = client.watch({ blocks: true }, { WebSocket: Fake, maxQueuedEvents: 5 });
+      const pending = it.next();
+      await new Promise((r) => setTimeout(r, 0));
+      const sock = instances[0] as unknown as { onmessage: (ev: { data: string }) => void };
+
+      // First frame satisfies the pending next(); the rest pile up unconsumed.
+      for (let i = 0; i < 50; i++) {
+        sock.onmessage({ data: JSON.stringify({ event: "block", n: i }) });
+      }
+      await pending;
+
+      // Events already buffered are still delivered — the bound stops growth,
+      // it doesn't discard what was legitimately received. The error surfaces
+      // once the buffer drains.
+      let drained = 0;
+      await assert.rejects(async () => {
+        for (;;) {
+          const r = await it.next();
+          if (r.done) throw new Error("stream ended without reporting the overflow");
+          drained++;
+          if (drained > 20) throw new Error("queue grew past the bound");
+        }
+      }, /event queue exceeded 5 entries/);
+      assert.ok(drained <= 5, `queue should have been capped, drained ${drained}`);
+      assert.equal(instances[0].closed, true, "socket must close when the bound trips");
+    });
+
+    it("allows an unbounded queue when maxQueuedEvents is 0", async () => {
+      const { Fake, instances } = fakeSocket([]);
+      const client = new TachiClient({ baseUrl: "https://example.com" });
+      const it = client.watch({ blocks: true }, { WebSocket: Fake, maxQueuedEvents: 0 });
+      const pending = it.next();
+      await new Promise((r) => setTimeout(r, 0));
+      const sock = instances[0] as unknown as { onmessage: (ev: { data: string }) => void };
+      for (let i = 0; i < 200; i++) {
+        sock.onmessage({ data: JSON.stringify({ event: "block", n: i }) });
+      }
+      const first = await pending;
+      assert.equal((first.value as { n: number }).n, 0);
+      const second = await it.next();
+      assert.equal((second.value as { n: number }).n, 1);
+      await it.return(undefined);
+    });
+
     it("surfaces a socket error", async () => {
       const { Fake } = fakeSocket([], { error: true });
       const client = new TachiClient({ baseUrl: "https://example.com" });
