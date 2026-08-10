@@ -75,8 +75,73 @@ console.log(info.result);
 | `broadcastTxSync(tx)` | `POST /tachi_txBroadcastSync` | Broadcast tx (wait for CheckTx) |
 | `query(params)` | `GET /tachi_query` | ABCI query |
 | `bitcoinRPC(request)` | `POST /` | Bitcoin JSON-RPC proxy |
+| `getAddress(address)` | `GET /tachi_address` | Balance, nonce & VTXO count |
+| `getBalance(address)` | `GET /tachi_balance` | Spendable balance |
+| `getNonce(address)` | `GET /tachi_nonce` | Current transaction nonce |
+| `getAddressTransactions(address, opts?)` | `GET /tachi_addressTransactions` | Address history (**slow — see below**) |
+| `getTransaction(hash, opts?)` | `GET /tachi_tx` | Transaction by hash, optional HAT/RIP proofs |
+| `getRawTransaction(hash)` | `GET /tachi_txRaw` | Raw transaction hex |
+| `listTransactions(opts?)` | `GET /tachi_listTransactions` | Recent transactions (**slow — see below**) |
+| `getMempool()` | `GET /tachi_mempool` | Pending transactions |
+| `getMempoolByAddress(address)` | `GET /tachi_mempoolByAddress` | Pending transactions for an address |
+| `decodeTransaction(tx)` | `POST /tachi_txDecode` | Decode raw hex without broadcasting |
+| `validateTransaction(tx)` | `POST /tachi_txValidate` | Validate raw hex without broadcasting |
+| `getFeeEstimate()` | `GET /tachi_feeEstimate` | Recommended / avg / min fee |
+| `getBlockByHeight(height)` | `GET /tachi_block` | Block with transactions |
+| `getBlock({height\|hash})` | `GET /tachi_getBlock` | Block by height or hash |
+| `getBlockHash(height)` | `GET /tachi_getBlockHash` | Block hash at a height |
+| `getBlockHeader({height\|hash})` | `GET /tachi_getBlockHeader` | Header only |
+| `listBlocks(params?)` | `GET /tachi_listBlocks` | Paginated block list |
+| `getEpoch({id\|hash})` | `GET /tachi_epoch` | Epoch by id or hash |
+| `listEpochs(params?)` | `GET /tachi_listEpochs` | Paginated epoch list |
+| `getStats()` | `GET /tachi_stats` | Chain-wide counters |
+| `getSupply()` | `GET /tachi_supply` | Total supply & VTXO count |
+| `search(q)` | `GET /tachi_search` | Resolve height/hash/address/VTXO |
+| `getNodeInfo()` | `GET /tachi_nodeInfo` | Node identity & sync status |
+| `getConsensusState()` | `GET /tachi_consensusState` | CometBFT consensus dump |
+| `getValidatorsPower()` | `GET /tachi_validatorsPower` | Voting power distribution |
+| `getWatchtowerStatus()` | `GET /tachi_watchtower/status` | Watchtower mode & scan progress |
+| `getWatchtowerReceipts(opts?)` | `GET /tachi_watchtower/receipts` | Observed L1 vault spends |
+| `signTransaction(refund)` | `POST /tachi_signTransaction` | Quorum co-sign a vault refund |
+| `watch(filters, opts?)` | `WS /tachi_ws` | Live event stream |
 
 > **Note:** every endpoint except `/health` and the Bitcoin RPC proxy is namespaced under `tachi_`. SDK versions before 0.2.0 used unprefixed paths and will 404 against current daemons.
+
+This covers all 47 daemon routes except `POST /tachi_validators/register`, which is documented below.
+
+### Live events
+
+`watch()` streams daemon events over WebSocket. At least one filter is required — the daemon rejects a filterless connection.
+
+```ts
+const ac = new AbortController();
+setTimeout(() => ac.abort(), 30_000);
+
+for await (const ev of client.watch({ blocks: true }, { signal: ac.signal })) {
+  if (ev.event === "block") console.log(ev.block);
+}
+```
+
+Filters: `address`, `vault`, `vaultId`, `blocks`, `validators`. Transaction alerts arrive **twice** — `state: "pending"` when CheckTx accepts, then `state: "committed"` once the block durably commits.
+
+Leaving the loop by any means (`break`, `return`, throw, or aborting the signal) closes the socket, so there's no separate teardown call.
+
+This uses the global `WebSocket`, which Node provides natively from **v22** — hence this package's `engines` floor. To run on an older runtime or supply a browser/test implementation, pass `options.WebSocket`.
+
+### Slow endpoints
+
+`getAddressTransactions()` and `listTransactions()` are **full-chain scans** — the daemon has no address index and walks every block. On a ~115k-block regtest chain, fetching an address with 2 matching transactions took ~17 seconds, and `listTransactions()` with no `pageSize` exceeded an 8-second timeout.
+
+Always pass `pageSize`, and page backwards with the `next_before_height` cursor rather than requesting a full history:
+
+```ts
+let cursor: number | undefined;
+do {
+  const page = await client.getAddressTransactions(addr, { pageSize: 25, beforeHeight: cursor });
+  handle(page.transactions);
+  cursor = page.next_before_height || undefined;
+} while (cursor);
+```
 
 ### Client options
 

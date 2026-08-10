@@ -7,6 +7,7 @@ import type {
   ReadyResponse,
   CometRPCResponse,
   BroadcastTxRequest,
+  TxHexRequest,
   BitcoinRPCRequest,
   BitcoinRPCResponse,
   QueryParams,
@@ -16,6 +17,32 @@ import type {
   LockedVTXOsResponse,
   ListVaultsResponse,
   PageParams,
+  AddressResponse,
+  BalanceResponse,
+  AddressTransactionsResponse,
+  GetTransactionResponse,
+  GetRawTransactionResponse,
+  ListTransactionsResponse,
+  MempoolResponse,
+  MempoolByAddressResponse,
+  TxDecodeResponse,
+  TxValidateResponse,
+  FeeEstimateResponse,
+  BlockResponse,
+  ListBlocksResponse,
+  GetBlockHashResponse,
+  GetBlockHeaderResponse,
+  GetEpochResponse,
+  ListEpochsResponse,
+  StatsResponse,
+  SupplyResponse,
+  SearchResponse,
+  NodeInfoResponse,
+  WatchtowerStatus,
+  RefundTx,
+  SignTransactionResponse,
+  WatchFilters,
+  TachiEvent,
 } from "./types";
 
 /** Cap on how much of a daemon error body is quoted back in a thrown Error. */
@@ -40,6 +67,33 @@ function isLoopbackHost(hostname: string): boolean {
   if (!m) return false;
   const octets = m.slice(1, 5).map(Number);
   return octets.every((o) => o <= 255) && octets[0] === 127;
+}
+
+/** Turn optional cursor-pagination options into query-string entries. */
+function cursorQuery(options?: { beforeHeight?: number; pageSize?: number }): Record<string, string> {
+  const qs: Record<string, string> = {};
+  if (options?.beforeHeight !== undefined) qs.before_height = String(options.beforeHeight);
+  if (options?.pageSize !== undefined) qs.page_size = String(options.pageSize);
+  return qs;
+}
+
+/**
+ * Validate a height-or-hash selector.
+ *
+ * The daemon 400s on a selectorless request; failing here keeps the error at
+ * the call site instead of a round-trip later.
+ */
+function blockSelector(
+  selector: { height?: number; hash?: string },
+  method: string,
+): Record<string, string> {
+  if (selector.height === undefined && !selector.hash) {
+    throw new Error(`${method} requires either a height or a hash`);
+  }
+  const qs: Record<string, string> = {};
+  if (selector.height !== undefined) qs.height = String(selector.height);
+  if (selector.hash) qs.hash = selector.hash;
+  return qs;
 }
 
 /** Turn optional pagination options into query-string entries. */
@@ -432,5 +486,382 @@ export class TachiClient {
       params: request.params ?? [],
       id: request.id ?? "tachi-sdk",
     });
+  }
+
+  // ── Address ──────────────────────────────────────────────────────
+
+  /**
+   * Balance, nonce, and VTXO count for an address.
+   *
+   * @param address - Taproot address (bc1p/tb1p/bcrt1p) or public key hex (32 or 33 bytes).
+   */
+  async getAddress(address: string): Promise<AddressResponse> {
+    return this.get("/tachi_address", { address });
+  }
+
+  /** Spendable balance in satoshis for an address. */
+  async getBalance(address: string): Promise<BalanceResponse> {
+    return this.get("/tachi_balance", { address });
+  }
+
+  /** Current transaction nonce for an address. */
+  async getNonce(address: string): Promise<Record<string, unknown>> {
+    return this.get("/tachi_nonce", { address });
+  }
+
+  /**
+   * Transactions involving an address, newest first.
+   *
+   * **This is a full-chain scan.** The daemon has no address index and walks
+   * every block, so latency grows with chain height — measured at ~17s on a
+   * ~115k-block regtest chain for an address with 2 matching transactions.
+   * Always pass `pageSize`, and page backwards with `beforeHeight` using the
+   * `next_before_height` cursor from the previous response rather than asking
+   * for an address's entire history in one call.
+   *
+   * @param address - Taproot address or public key hex.
+   * @param options.beforeHeight - Return transactions below this height (the cursor).
+   * @param options.pageSize - Entries per page.
+   */
+  async getAddressTransactions(
+    address: string,
+    options?: { beforeHeight?: number; pageSize?: number },
+  ): Promise<AddressTransactionsResponse> {
+    return this.get("/tachi_addressTransactions", { address, ...cursorQuery(options) });
+  }
+
+  // ── Transactions ─────────────────────────────────────────────────
+
+  /**
+   * Look up a transaction by hash.
+   *
+   * @param hash - Transaction hash hex.
+   * @param options.hat - Include the Hash-Anchored Timestamp proof.
+   * @param options.rip - Include the RIP payload.
+   * @param options.vtxoId - Scope the HAT proof to a single VTXO.
+   * @param options.originEpoch - Lower epoch bound for proof lookup.
+   * @param options.finalEpoch - Upper epoch bound for proof lookup.
+   */
+  async getTransaction(
+    hash: string,
+    options?: {
+      hat?: boolean;
+      rip?: boolean;
+      vtxoId?: string;
+      originEpoch?: number;
+      finalEpoch?: number;
+    },
+  ): Promise<GetTransactionResponse> {
+    const qs: Record<string, string> = { hash };
+    if (options?.hat) qs.hat = "true";
+    if (options?.rip) qs.rip = "true";
+    if (options?.vtxoId) qs.vtxo_id = options.vtxoId;
+    if (options?.originEpoch !== undefined) qs.origin_epoch = String(options.originEpoch);
+    if (options?.finalEpoch !== undefined) qs.final_epoch = String(options.finalEpoch);
+    return this.get("/tachi_tx", qs);
+  }
+
+  /** Raw transaction hex by hash. */
+  async getRawTransaction(hash: string): Promise<GetRawTransactionResponse> {
+    return this.get("/tachi_txRaw", { hash });
+  }
+
+  /**
+   * Recent transactions across the chain, newest first.
+   *
+   * Same full-chain-scan caveat as {@link getAddressTransactions} — omitting
+   * `pageSize` has been observed to exceed an 8-second timeout. Pass one, and
+   * page with the `next_before_height` cursor.
+   */
+  async listTransactions(options?: {
+    beforeHeight?: number;
+    pageSize?: number;
+  }): Promise<ListTransactionsResponse> {
+    return this.get("/tachi_listTransactions", cursorQuery(options));
+  }
+
+  /** Transactions currently in the mempool. */
+  async getMempool(): Promise<MempoolResponse> {
+    return this.get("/tachi_mempool");
+  }
+
+  /** Mempool transactions involving a given address. */
+  async getMempoolByAddress(address: string): Promise<MempoolByAddressResponse> {
+    return this.get("/tachi_mempoolByAddress", { address });
+  }
+
+  /**
+   * Decode a raw transaction without broadcasting it.
+   *
+   * @param tx - Hex-encoded transaction (no `0x` prefix).
+   */
+  async decodeTransaction(tx: string): Promise<TxDecodeResponse> {
+    // Note: this endpoint takes `hex`, not the `tx` field the broadcast
+    // endpoints use. Verified against the live daemon.
+    return this.post("/tachi_txDecode", { hex: tx } satisfies TxHexRequest);
+  }
+
+  /**
+   * Validate a raw transaction without broadcasting it.
+   *
+   * **A resolved promise does not mean the transaction is valid** — check the
+   * `valid` field. The promise only rejects on an HTTP-level failure.
+   *
+   * @param tx - Hex-encoded transaction (no `0x` prefix).
+   */
+  async validateTransaction(tx: string): Promise<TxValidateResponse> {
+    return this.post("/tachi_txValidate", { hex: tx } satisfies TxHexRequest);
+  }
+
+  /** Recommended, average, and minimum fee in satoshis. */
+  async getFeeEstimate(): Promise<FeeEstimateResponse> {
+    return this.get("/tachi_feeEstimate");
+  }
+
+  // ── Blocks ───────────────────────────────────────────────────────
+
+  /** Block at a height, including its transactions. */
+  async getBlockByHeight(height: number): Promise<BlockResponse> {
+    return this.get("/tachi_block", { height: String(height) });
+  }
+
+  /**
+   * Block by height or hash, including its transactions.
+   *
+   * @throws If neither `height` nor `hash` is supplied.
+   */
+  async getBlock(selector: { height?: number; hash?: string }): Promise<BlockResponse> {
+    return this.get("/tachi_getBlock", blockSelector(selector, "getBlock"));
+  }
+
+  /** Block hash at a height. */
+  async getBlockHash(height: number): Promise<GetBlockHashResponse> {
+    return this.get("/tachi_getBlockHash", { height: String(height) });
+  }
+
+  /**
+   * Block header by height or hash — no transaction bodies.
+   *
+   * @throws If neither `height` nor `hash` is supplied.
+   */
+  async getBlockHeader(selector: {
+    height?: number;
+    hash?: string;
+  }): Promise<GetBlockHeaderResponse> {
+    return this.get("/tachi_getBlockHeader", blockSelector(selector, "getBlockHeader"));
+  }
+
+  /** Paginated block list, newest first. */
+  async listBlocks(params?: PageParams): Promise<ListBlocksResponse> {
+    return this.get("/tachi_listBlocks", pageQuery(params));
+  }
+
+  // ── Epochs ───────────────────────────────────────────────────────
+
+  /**
+   * Epoch by id or hash.
+   *
+   * The daemon requires exactly one of the two — there is no "current epoch"
+   * form. Use `getStats().current_epoch` to find the latest id first.
+   *
+   * @throws If neither or both of `id` and `hash` are supplied.
+   */
+  async getEpoch(selector: { id?: number; hash?: string }): Promise<GetEpochResponse> {
+    const hasId = selector.id !== undefined;
+    const hasHash = Boolean(selector.hash);
+    if (hasId === hasHash) {
+      throw new Error("getEpoch requires exactly one of id or hash");
+    }
+    const qs: Record<string, string> = {};
+    if (hasId) qs.id = String(selector.id);
+    if (hasHash) qs.hash = selector.hash as string;
+    return this.get("/tachi_epoch", qs);
+  }
+
+  /** Paginated epoch list, newest first. */
+  async listEpochs(params?: PageParams): Promise<ListEpochsResponse> {
+    return this.get("/tachi_listEpochs", pageQuery(params));
+  }
+
+  // ── Dashboard & stats ────────────────────────────────────────────
+
+  /** Chain-wide counters: height, epoch, supply, accounts, transactions. */
+  async getStats(): Promise<StatsResponse> {
+    return this.get("/tachi_stats");
+  }
+
+  /** Total supply in satoshis and the VTXO count backing it. */
+  async getSupply(): Promise<SupplyResponse> {
+    return this.get("/tachi_supply");
+  }
+
+  /**
+   * Resolve a free-form query to a block, transaction, address, or VTXO.
+   *
+   * Narrow on the returned `type` before using `result`.
+   *
+   * @param q - A height, hash, address, or VTXO id.
+   */
+  async search(q: string): Promise<SearchResponse> {
+    return this.get("/tachi_search", { q });
+  }
+
+  /** Node identity, version, sync status, and peer count. */
+  async getNodeInfo(): Promise<NodeInfoResponse> {
+    return this.get("/tachi_nodeInfo");
+  }
+
+  /** Full CometBFT consensus state dump. */
+  async getConsensusState(): Promise<CometRPCResponse> {
+    return this.get("/tachi_consensusState");
+  }
+
+  /** Validator voting power distribution (via CometBFT). */
+  async getValidatorsPower(): Promise<CometRPCResponse> {
+    return this.get("/tachi_validatorsPower");
+  }
+
+  // ── Watchtower ───────────────────────────────────────────────────
+
+  /** Watchtower mode, scan progress, and receipt count. */
+  async getWatchtowerStatus(): Promise<WatchtowerStatus> {
+    return this.get("/tachi_watchtower/status");
+  }
+
+  /**
+   * Watchtower receipts for observed L1 spends of vault funding outpoints.
+   *
+   * @param options.vault - Restrict to one vault address.
+   * @param options.state - Restrict to one receipt state.
+   */
+  async getWatchtowerReceipts(options?: {
+    vault?: string;
+    state?: number;
+  }): Promise<Record<string, unknown>> {
+    const qs: Record<string, string> = {};
+    if (options?.vault) qs.vault = options.vault;
+    if (options?.state !== undefined) qs.state = String(options.state);
+    return this.get("/tachi_watchtower/receipts", qs);
+  }
+
+  // ── Vault refund signing ─────────────────────────────────────────
+
+  /**
+   * Ask the daemon's quorum to co-sign a vault refund transaction.
+   *
+   * @param refund - The refund transaction carrying the user's signature.
+   */
+  async signTransaction(refund: RefundTx): Promise<SignTransactionResponse> {
+    return this.post("/tachi_signTransaction", refund);
+  }
+
+  // ── Real-time events ─────────────────────────────────────────────
+
+  /**
+   * Subscribe to the daemon's push event stream over WebSocket.
+   *
+   * Yields events until the caller breaks out of the loop, the connection
+   * closes, or `signal` aborts — whichever happens first. Leaving the loop by
+   * any means (`break`, `return`, or an exception) closes the socket, so there
+   * is no separate teardown call.
+   *
+   * At least one filter is required; the daemon rejects a filterless
+   * connection. Transaction alerts arrive twice — once as `state: "pending"`
+   * when CheckTx accepts, then as `state: "committed"` once the block commits.
+   *
+   * Uses the global `WebSocket`, which Node provides natively from v22 (hence
+   * this package's `engines` floor). Pass `options.WebSocket` to supply your
+   * own implementation — for a browser bundle, an older runtime, or a test.
+   *
+   * @example
+   * ```ts
+   * const ac = new AbortController();
+   * setTimeout(() => ac.abort(), 30_000);
+   * for await (const ev of client.watch({ blocks: true }, { signal: ac.signal })) {
+   *   if (ev.event === "block") console.log(ev.block);
+   * }
+   * ```
+   *
+   * @throws If no filter is set, or if no WebSocket implementation is available.
+   */
+  async *watch(
+    filters: WatchFilters,
+    options?: { signal?: AbortSignal; WebSocket?: typeof globalThis.WebSocket },
+  ): AsyncGenerator<TachiEvent, void, undefined> {
+    const qs = new URLSearchParams();
+    if (filters.address) qs.set("address", filters.address);
+    if (filters.vault) qs.set("vault", filters.vault);
+    if (filters.vaultId) qs.set("vaultId", filters.vaultId);
+    if (filters.blocks) qs.set("blocks", "true");
+    if (filters.validators) qs.set("validators", "true");
+    if ([...qs.keys()].length === 0) {
+      throw new Error(
+        "watch() requires at least one filter (address, vault, vaultId, blocks, or validators)",
+      );
+    }
+
+    const Impl = options?.WebSocket ?? globalThis.WebSocket;
+    if (!Impl) {
+      throw new Error(
+        "No WebSocket implementation available. Node provides one natively from v22; " +
+          "on older runtimes pass options.WebSocket.",
+      );
+    }
+
+    const url = new URL("/tachi_ws", this.baseUrl);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    url.search = qs.toString();
+
+    const socket = new Impl(url.toString());
+    // Buffer events that arrive while the consumer is between iterations, so a
+    // slow loop body drops nothing.
+    const queue: TachiEvent[] = [];
+    let notify: (() => void) | undefined;
+    let closed = false;
+    let failure: Error | undefined;
+
+    const wake = () => {
+      notify?.();
+      notify = undefined;
+    };
+    const stop = (err?: Error) => {
+      if (err && !failure) failure = err;
+      closed = true;
+      wake();
+    };
+
+    socket.onmessage = (ev: MessageEvent) => {
+      try {
+        queue.push(JSON.parse(String(ev.data)) as TachiEvent);
+      } catch {
+        // A frame we can't parse shouldn't kill an otherwise healthy stream.
+        return;
+      }
+      wake();
+    };
+    socket.onerror = () => stop(new Error(`watch: websocket error (${url.host})`));
+    socket.onclose = () => stop();
+
+    const onAbort = () => stop();
+    options?.signal?.addEventListener("abort", onAbort, { once: true });
+
+    try {
+      for (;;) {
+        while (queue.length > 0) yield queue.shift() as TachiEvent;
+        if (failure) throw failure;
+        if (closed) return;
+        if (options?.signal?.aborted) return;
+        await new Promise<void>((resolve) => {
+          notify = resolve;
+        });
+      }
+    } finally {
+      options?.signal?.removeEventListener("abort", onAbort);
+      try {
+        socket.close();
+      } catch {
+        // Already closing or closed — nothing to do.
+      }
+    }
   }
 }

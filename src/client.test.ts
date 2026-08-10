@@ -490,4 +490,222 @@ describe("TachiClient", () => {
       assert.ok(mock.calls[0].input.startsWith("https://example.com/health"));
     });
   });
+  describe("address endpoints", () => {
+    it("passes address to getAddress/getBalance/getNonce", async () => {
+      for (const [fn, path] of [
+        ["getAddress", "/tachi_address"],
+        ["getBalance", "/tachi_balance"],
+        ["getNonce", "/tachi_nonce"],
+      ] as const) {
+        const { client, calls } = makeClient({});
+        await (client as never as Record<string, (a: string) => Promise<unknown>>)[fn]("bcrt1p...");
+        assert.ok(calls[0].input.includes(`${path}?address=bcrt1p`), `${fn} -> ${calls[0].input}`);
+      }
+    });
+
+    it("maps cursor options to before_height/page_size", async () => {
+      const { client, calls } = makeClient({ transactions: [] });
+      await client.getAddressTransactions("bcrt1p...", { beforeHeight: 500, pageSize: 10 });
+      assert.ok(calls[0].input.includes("before_height=500"));
+      assert.ok(calls[0].input.includes("page_size=10"));
+    });
+
+    it("omits cursor params when not supplied", async () => {
+      const { client, calls } = makeClient({ transactions: [] });
+      await client.listTransactions();
+      assert.ok(calls[0].input.endsWith("/tachi_listTransactions"));
+    });
+  });
+
+  describe("transaction endpoints", () => {
+    it("maps optional proof flags onto the query string", async () => {
+      const { client, calls } = makeClient({});
+      await client.getTransaction("abc", { hat: true, rip: true, vtxoId: "vv", originEpoch: 1, finalEpoch: 2 });
+      const u = calls[0].input;
+      assert.ok(u.includes("hash=abc"));
+      assert.ok(u.includes("hat=true"));
+      assert.ok(u.includes("rip=true"));
+      assert.ok(u.includes("vtxo_id=vv"));
+      assert.ok(u.includes("origin_epoch=1"));
+      assert.ok(u.includes("final_epoch=2"));
+    });
+
+    it("omits proof flags when false or absent", async () => {
+      const { client, calls } = makeClient({});
+      await client.getTransaction("abc", { hat: false });
+      assert.ok(!calls[0].input.includes("hat="));
+      assert.ok(!calls[0].input.includes("rip="));
+    });
+
+    // The daemon takes `hex` here, not the `tx` field the broadcast endpoints
+    // use. Getting this wrong yields a 400 that only shows up against a live
+    // daemon, so pin it.
+    it("sends decode/validate bodies as { hex }", async () => {
+      for (const fn of ["decodeTransaction", "validateTransaction"] as const) {
+        const { client, calls } = makeClient({});
+        await client[fn]("deadbeef");
+        const body = JSON.parse(calls[0].init?.body as string);
+        assert.deepEqual(body, { hex: "deadbeef" }, `${fn} body`);
+      }
+    });
+  });
+
+  describe("block endpoints", () => {
+    it("accepts height or hash", async () => {
+      const { client, calls } = makeClient({});
+      await client.getBlock({ height: 7 });
+      assert.ok(calls[0].input.includes("height=7"));
+
+      const b = makeClient({});
+      await b.client.getBlockHeader({ hash: "ff" });
+      assert.ok(b.calls[0].input.includes("hash=ff"));
+    });
+
+    it("rejects a selector with neither height nor hash, before any request", async () => {
+      for (const fn of ["getBlock", "getBlockHeader"] as const) {
+        const mock = createMockFetch({});
+        const client = new TachiClient({ baseUrl: "https://example.com", fetch: mock.fn });
+        await assert.rejects(() => client[fn]({}), /requires either a height or a hash/);
+        assert.equal(mock.calls.length, 0, `${fn} must not hit the network`);
+      }
+    });
+  });
+
+  describe("getEpoch", () => {
+    it("accepts exactly one of id or hash", async () => {
+      const a = makeClient({});
+      await a.client.getEpoch({ id: 3 });
+      assert.ok(a.calls[0].input.includes("id=3"));
+
+      const b = makeClient({});
+      await b.client.getEpoch({ hash: "ab" });
+      assert.ok(b.calls[0].input.includes("hash=ab"));
+    });
+
+    // The daemon rejects both the empty and the both-supplied forms; fail at
+    // the call site rather than after a round trip.
+    it("rejects neither-or-both without hitting the network", async () => {
+      for (const sel of [{}, { id: 1, hash: "ab" }]) {
+        const mock = createMockFetch({});
+        const client = new TachiClient({ baseUrl: "https://example.com", fetch: mock.fn });
+        await assert.rejects(() => client.getEpoch(sel), /exactly one of id or hash/);
+        assert.equal(mock.calls.length, 0);
+      }
+    });
+  });
+
+  describe("watch", () => {
+    /** Minimal scriptable WebSocket stand-in. */
+    function fakeSocket(frames: unknown[], opts?: { closeAfter?: boolean; error?: boolean }) {
+      const instances: Array<Record<string, unknown>> = [];
+      class Fake {
+        onmessage?: (ev: { data: string }) => void;
+        onerror?: () => void;
+        onclose?: () => void;
+        closed = false;
+        url: string;
+        constructor(url: string) {
+          this.url = url;
+          instances.push(this as never as Record<string, unknown>);
+          queueMicrotask(() => {
+            for (const f of frames) this.onmessage?.({ data: JSON.stringify(f) });
+            if (opts?.error) this.onerror?.();
+            if (opts?.closeAfter) this.onclose?.();
+          });
+        }
+        close() {
+          this.closed = true;
+        }
+      }
+      return { Fake: Fake as never as typeof globalThis.WebSocket, instances };
+    }
+
+    it("builds a ws:// or wss:// URL with the filters", async () => {
+      const { Fake, instances } = fakeSocket([{ event: "block" }], { closeAfter: true });
+      const client = new TachiClient({ baseUrl: "https://example.com" });
+      const seen = [];
+      for await (const ev of client.watch({ blocks: true, address: "bcrt1p" }, { WebSocket: Fake })) {
+        seen.push(ev);
+      }
+      const url = String(instances[0].url);
+      assert.ok(url.startsWith("wss://example.com/tachi_ws?"), url);
+      assert.ok(url.includes("blocks=true"));
+      assert.ok(url.includes("address=bcrt1p"));
+      assert.equal(seen.length, 1);
+    });
+
+    it("uses ws:// for an http baseUrl", async () => {
+      const { Fake, instances } = fakeSocket([], { closeAfter: true });
+      const client = new TachiClient({ baseUrl: "http://127.0.0.1:8080" });
+      for await (const _ of client.watch({ blocks: true }, { WebSocket: Fake })) break;
+      assert.ok(String(instances[0].url).startsWith("ws://127.0.0.1:8080/"));
+    });
+
+    it("requires at least one filter", async () => {
+      const client = new TachiClient({ baseUrl: "https://example.com" });
+      const { Fake, instances } = fakeSocket([]);
+      await assert.rejects(async () => {
+        for await (const _ of client.watch({}, { WebSocket: Fake })) break;
+      }, /requires at least one filter/);
+      assert.equal(instances.length, 0, "must not open a socket");
+    });
+
+    it("yields queued events in order and closes the socket on break", async () => {
+      const { Fake, instances } = fakeSocket([
+        { event: "block", n: 1 },
+        { event: "block", n: 2 },
+        { event: "block", n: 3 },
+      ]);
+      const client = new TachiClient({ baseUrl: "https://example.com" });
+      const got: number[] = [];
+      for await (const ev of client.watch({ blocks: true }, { WebSocket: Fake })) {
+        got.push(ev.n as number);
+        if (got.length === 2) break;
+      }
+      assert.deepEqual(got, [1, 2]);
+      assert.equal(instances[0].closed, true, "socket must close when the loop exits");
+    });
+
+    it("ignores unparseable frames rather than killing the stream", async () => {
+      // A malformed frame must be skipped, not abort the iteration: the good
+      // frame after it still has to arrive.
+      const { Fake, instances } = fakeSocket([]);
+      const client = new TachiClient({ baseUrl: "https://example.com" });
+      const it = client.watch({ blocks: true }, { WebSocket: Fake });
+      const pending = it.next();
+      await new Promise((r) => setTimeout(r, 0));
+      const sock = instances[0] as unknown as {
+        onmessage: (ev: { data: string }) => void;
+      };
+      sock.onmessage({ data: "{not json" });
+      sock.onmessage({ data: JSON.stringify({ event: "block", n: 9 }) });
+      const first = await pending;
+      assert.equal((first.value as { n: number }).n, 9);
+      await it.return(undefined);
+    });
+
+    it("surfaces a socket error", async () => {
+      const { Fake } = fakeSocket([], { error: true });
+      const client = new TachiClient({ baseUrl: "https://example.com" });
+      await assert.rejects(async () => {
+        for await (const _ of client.watch({ blocks: true }, { WebSocket: Fake })) {
+          // drain
+        }
+      }, /websocket error/);
+    });
+
+    it("stops when the abort signal fires", async () => {
+      const { Fake, instances } = fakeSocket([]);
+      const ac = new AbortController();
+      const client = new TachiClient({ baseUrl: "https://example.com" });
+      const done = (async () => {
+        for await (const _ of client.watch({ blocks: true }, { WebSocket: Fake, signal: ac.signal })) {
+          // never yields
+        }
+      })();
+      queueMicrotask(() => ac.abort());
+      await done;
+      assert.equal(instances[0].closed, true);
+    });
+  });
 });
