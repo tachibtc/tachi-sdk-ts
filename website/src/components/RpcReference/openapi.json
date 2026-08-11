@@ -1,0 +1,3748 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "description": "HTTP RPC surface exposed by tachid.\\n\\n**Daemon-native endpoints** — REST routes for validators, peer info, and health.\\n\\n**Bitcoin RPC proxy** — POST / forwards a standard JSON-RPC 1.0 request straight through to the underlying bitcoind.",
+    "title": "Tachi Daemon RPC",
+    "contact": {},
+    "version": "0.1.0"
+  },
+  "basePath": "/",
+  "paths": {
+    "/": {
+      "post": {
+        "description": "Forwards a JSON-RPC 1.0 request to bitcoind. Methods in readOnlyBitcoinMethods are always proxied; other methods require an X-Api-Key header matching the universal key (see SetBitcoinAPIKey).",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Bitcoin"
+        ],
+        "summary": "Bitcoin JSON-RPC 1.0 proxy",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Universal API key unlocking every bitcoind method beyond the common read-only set",
+            "name": "X-Api-Key",
+            "in": "header"
+          },
+          {
+            "description": "JSON-RPC 1.0 request",
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/rpc.BitcoinRPCRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.BitcoinRPCResponse"
+            }
+          },
+          "400": {
+            "description": "invalid json-rpc request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "403": {
+            "description": "method not permitted",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "415": {
+            "description": "content-type must be application/json",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "bitcoin client not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "description": "Liveness probe that returns the daemon status and validator count.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.HealthResponse"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_address": {
+      "get": {
+        "description": "Returns balance, nonce, and VTXO count for the given public key.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Address"
+        ],
+        "summary": "Address detail",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Taproot address (bc1p/tb1p/bcrt1p) or public key hex (32 or 33 bytes)",
+            "name": "address",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.AddressResponse"
+            }
+          },
+          "400": {
+            "description": "address query parameter is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_addressTransactions": {
+      "get": {
+        "description": "Returns transactions involving the given pubkey in descending height order. Pagination is height-cursor based — pass `before_height` from the previous response's `next_before_height`. The scan is bounded by a server-side time budget, not a block cap; on cutoff the response carries partial results and a cursor.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Address"
+        ],
+        "summary": "Address transactions (cursor-based)",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Taproot address (bc1p/tb1p/bcrt1p) or public key hex (32 or 33 bytes)",
+            "name": "address",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Exclusive upper-bound block height (default: chain tip)",
+            "name": "before_height",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "Max transactions to return (default 50, max 100)",
+            "name": "page_size",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.AddressTransactionsResponse"
+            }
+          },
+          "400": {
+            "description": "address query parameter is required or invalid before_height",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "504": {
+            "description": "time budget exhausted before any block scanned",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_addressVtxos": {
+      "get": {
+        "description": "Returns VTXOs for the given public key. By default only unspent; pass include_spent=true for full history.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Address"
+        ],
+        "summary": "Address VTXOs",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Taproot address (bc1p/tb1p/bcrt1p) or public key hex (32 or 33 bytes)",
+            "name": "address",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "boolean",
+            "description": "Include spent VTXOs (default false)",
+            "name": "include_spent",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.AddressVTXOsResponse"
+            }
+          },
+          "400": {
+            "description": "address query parameter is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_balance": {
+      "get": {
+        "description": "Returns the total unspent balance for the given public key in satoshis.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Address"
+        ],
+        "summary": "Balance",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Taproot address (bc1p/tb1p/bcrt1p) or public key hex (32 or 33 bytes)",
+            "name": "address",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.BalanceResponse"
+            }
+          },
+          "400": {
+            "description": "address query parameter is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_block": {
+      "get": {
+        "description": "Returns block metadata and all decoded transactions at the given height.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Block"
+        ],
+        "summary": "Block detail",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Block height",
+            "name": "height",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.BlockResponse"
+            }
+          },
+          "400": {
+            "description": "height query parameter is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_consensusState": {
+      "get": {
+        "description": "Forwards to CometBFT's consensus_state endpoint. Returns current round, step, and proposer info.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Node"
+        ],
+        "summary": "Consensus state",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.CometRPCResponse"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_epoch": {
+      "get": {
+        "description": "Returns a Tachi-decoded view of an epoch. Lookup is by EpochID via `?id=N` or by Verkle-root hex via `?hash=<hex>` — exactly one of the two is required; there is no no-argument \"current epoch\" form. Bitcoin block height is populated only when the epoch is L1-settled and the daemon's bitcoin client is configured.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Epoch"
+        ],
+        "summary": "Get epoch by id or root hash",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "EpochID (uint32). Required unless hash is given — exactly one of id/hash, never both.",
+            "name": "id",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "Verkle root hex (64 chars). Required unless id is given — exactly one of id/hash, never both.",
+            "name": "hash",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.GetEpochResponse"
+            }
+          },
+          "400": {
+            "description": "exactly one of id or hash is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "404": {
+            "description": "epoch not found",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_feeEstimate": {
+      "get": {
+        "description": "Returns the minimum, average, and recommended transaction fee based on recent confirmed transactions.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Transaction"
+        ],
+        "summary": "Fee estimate",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.FeeEstimateResponse"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_getBlock": {
+      "get": {
+        "description": "Returns Tachi chain block metadata and all decoded transactions. Analogous to bitcoind's getblock, but for Tachi's own chain. Lookup by ?height=N or ?hash=<hex>.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Block"
+        ],
+        "summary": "Get Tachi block (header + transactions)",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Block height",
+            "name": "height",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "Block hash (hex)",
+            "name": "hash",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.BlockResponse"
+            }
+          },
+          "400": {
+            "description": "exactly one of height or hash is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_getBlockHash": {
+      "get": {
+        "description": "Returns the Tachi chain's block hash at the given height. Analogous to bitcoind's getblockhash, but for Tachi's own chain.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Block"
+        ],
+        "summary": "Get Tachi block hash by height",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Block height",
+            "name": "height",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.GetBlockHashResponse"
+            }
+          },
+          "400": {
+            "description": "height query parameter is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_getBlockHeader": {
+      "get": {
+        "description": "Returns Tachi chain block header metadata (no transaction list). Analogous to bitcoind's getblockheader, but for Tachi's own chain. Lookup by ?height=N or ?hash=<hex>.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Block"
+        ],
+        "summary": "Get Tachi block header",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Block height",
+            "name": "height",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "Block hash (hex)",
+            "name": "hash",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.GetBlockHeaderResponse"
+            }
+          },
+          "400": {
+            "description": "exactly one of height or hash is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_listBlocks": {
+      "get": {
+        "description": "Returns a paginated list of blocks from latest to oldest with tx counts.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Block"
+        ],
+        "summary": "List blocks",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Page number (1-based, default 1)",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "Blocks per page (default 50, max 100)",
+            "name": "page_size",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.ListBlocksResponse"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_listEpochs": {
+      "get": {
+        "description": "Returns a paginated list of all epochs from latest to oldest with full metadata.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Epoch"
+        ],
+        "summary": "List epochs",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Page number (1-based, default 1)",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "Epochs per page (default 50, max 100)",
+            "name": "page_size",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.ListEpochsResponse"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_listTransactions": {
+      "get": {
+        "description": "Returns committed transactions in descending height order. Pagination is height-cursor based — pass `before_height` from the previous response's `next_before_height`. The handler walks until it fills page_size, reaches genesis, or hits an internal time budget; on a time-budget cutoff it returns partial results and a cursor so the client keeps walking.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Transaction"
+        ],
+        "summary": "List transactions (cursor-based)",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Exclusive upper-bound block height (default: chain tip)",
+            "name": "before_height",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "Max transactions to return (default 50, max 100)",
+            "name": "page_size",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.ListTransactionsResponse"
+            }
+          },
+          "400": {
+            "description": "invalid before_height or page_size",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "504": {
+            "description": "time budget exhausted before any block scanned",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_listVaults": {
+      "get": {
+        "description": "Returns a paginated list of vaults owned by the given user. Accepts the same input forms as the address endpoints. csv_delay/threshold/quorum_keyset/user_key (vault reconstruction params) are redacted unless X-Api-Key matches the universal master key or a client key registered with vault access (see SetBitcoinAPIKey / AddClientAPIKey).",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Vault"
+        ],
+        "summary": "List vaults by user",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Taproot address (bc1p/tb1p/bcrt1p) or public key hex (32 or 33 bytes)",
+            "name": "user",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "integer",
+            "description": "Page number (1-based, default 1)",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "Vaults per page (default 50, max 100)",
+            "name": "page_size",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "Master API key, or a client key registered with vault access, unlocking vault reconstruction params (csv_delay/threshold/quorum_keyset/user_key)",
+            "name": "X-Api-Key",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.ListVaultsResponse"
+            }
+          },
+          "400": {
+            "description": "user query parameter is required / invalid",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_listVtxos": {
+      "get": {
+        "description": "Returns a paginated list of all VTXOs (unspent and spent), sorted by height descending.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "VTXO"
+        ],
+        "summary": "List all VTXOs",
+        "parameters": [
+          {
+            "type": "integer",
+            "description": "Page number (1-based, default 1)",
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "VTXOs per page (default 50, max 100)",
+            "name": "page_size",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.ListVTXOsResponse"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_mempool": {
+      "get": {
+        "description": "Returns decoded pending transactions from the CometBFT unconfirmed mempool.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "CometProxy"
+        ],
+        "summary": "Mempool",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.MempoolResponse"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_mempoolByAddress": {
+      "get": {
+        "description": "Returns pending (unconfirmed) transactions crediting the given address (vout match) or spending one of its currently-unspent VTXOs (vin match), tagged with a direction the same way GET /tachi_addressTransactions is.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Address"
+        ],
+        "summary": "Mempool filtered by address",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Taproot address (bc1p/tb1p/bcrt1p) or public key hex (32 or 33 bytes)",
+            "name": "address",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.MempoolByAddressResponse"
+            }
+          },
+          "400": {
+            "description": "address query parameter is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_netInfo": {
+      "get": {
+        "description": "Forwards to CometBFT's net_info endpoint. Returns listening addresses, connected peer count, and per-peer connection info.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "CometProxy"
+        ],
+        "summary": "CometBFT network info",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.CometRPCResponse"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_nodeInfo": {
+      "get": {
+        "description": "Returns extended node information including version, chain ID, sync status, epoch config, and peer count.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Node"
+        ],
+        "summary": "Node info",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.NodeInfoResponse"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_nonce": {
+      "get": {
+        "description": "Returns the last used nonce for the given pubkey hex. The next transaction should use nonce+1.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Transaction"
+        ],
+        "summary": "Get nonce for address",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Public key hex (compressed 33-byte or x-only 32-byte)",
+            "name": "address",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "400": {
+            "description": "address query parameter is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_peerInfo": {
+      "get": {
+        "description": "Returns the PeerID, public key, and network addresses of this node.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Peer"
+        ],
+        "summary": "Get this node's peer info",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.ValidatorInfo"
+            }
+          },
+          "503": {
+            "description": "peer info not set",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_query": {
+      "get": {
+        "description": "Forwards a query to CometBFT's abci_query endpoint. The ABCI application interprets the path and data.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "CometProxy"
+        ],
+        "summary": "ABCI query",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "ABCI query path",
+            "name": "path",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "string",
+            "description": "Hex-encoded query data",
+            "name": "data",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "Block height to query at (0 or empty for latest)",
+            "name": "height",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.CometRPCResponse"
+            }
+          },
+          "400": {
+            "description": "path query parameter is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_search": {
+      "get": {
+        "description": "Auto-detects whether the query is a tx hash, block height, epoch ID, VTXO ID, or pubkey and returns the matching result.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Universal search",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Search query (tx hash, block height, epoch ID, pubkey hex, or VTXO ID hex)",
+            "name": "q",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.SearchResponse"
+            }
+          },
+          "400": {
+            "description": "q query parameter is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "404": {
+            "description": "not found",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_signTransaction": {
+      "post": {
+        "description": "Fans a PSBT-shaped refund (which must carry the owner's userSig over the cooperative-leaf sighash) out to the 5-of-7 quorum and returns it with the collected tapScriptSig partials.",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Refund"
+        ],
+        "summary": "Cooperatively sign a vault refund",
+        "parameters": [
+          {
+            "description": "PSBT-shaped refund transaction",
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/github_com_tachibtc_daemon_vault_refund.RefundTx"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.SignTransactionResponse"
+            }
+          },
+          "400": {
+            "description": "invalid request body",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "refund signing disabled",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "504": {
+            "description": "threshold not reached",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_stats": {
+      "get": {
+        "description": "Returns a combined overview of chain height, total transactions, accounts, epochs, node count, and supply in a single call.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Network stats",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.StatsResponse"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_status": {
+      "get": {
+        "description": "Forwards to CometBFT's status endpoint. Returns node info, sync status, and the latest block height.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "CometProxy"
+        ],
+        "summary": "CometBFT node status",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.CometRPCResponse"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_supply": {
+      "get": {
+        "description": "Returns the total circulating supply (sum of all unspent VTXO amounts) and unspent VTXO count.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Total supply",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.SupplyResponse"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_tx": {
+      "get": {
+        "description": "Returns a Tachi-decoded view of a transaction. Looks up the tx in CometBFT's committed store first; on miss, scans the unconfirmed mempool. Pass ?hat=true to attach the HAT commitment for the tx's first spent VTXO, and/or ?rip=true&origin_epoch=N&final_epoch=M to attach a RIP inclusion proof.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Transaction"
+        ],
+        "summary": "Get transaction by hash",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Transaction hash (40-char hex, CometBFT tmhash)",
+            "name": "hash",
+            "in": "query",
+            "required": true
+          },
+          {
+            "type": "boolean",
+            "description": "Attach HAT proof for the selected input VTXO (defaults to the first input when vtxo_id is omitted)",
+            "name": "hat",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "Attach RIP inclusion proof (requires origin_epoch and final_epoch)",
+            "name": "rip",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "Epoch the HAT was inserted into (required when rip=true)",
+            "name": "origin_epoch",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "L1-settled epoch to chain the proof up to (required when rip=true)",
+            "name": "final_epoch",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "Hex-encoded VTXO id selecting which of the tx's inputs to prove (must be one of tx.vin[].vtxo_id); defaults to the first input",
+            "name": "vtxo_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.GetTransactionResponse"
+            }
+          },
+          "400": {
+            "description": "hash query parameter is required or invalid",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "404": {
+            "description": "transaction not found",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_txBroadcastAsync": {
+      "post": {
+        "description": "Forwards a hex-encoded transaction to CometBFT's broadcast_tx_async endpoint. Returns immediately without waiting for CheckTx.",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Transaction"
+        ],
+        "summary": "Broadcast transaction (async)",
+        "parameters": [
+          {
+            "description": "Hex-encoded transaction",
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/rpc.BroadcastTxRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.CometRPCResponse"
+            }
+          },
+          "400": {
+            "description": "invalid request body or missing tx field",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_txBroadcastSync": {
+      "post": {
+        "description": "Forwards a hex-encoded transaction to CometBFT's broadcast_tx_sync endpoint. Waits for CheckTx to complete before responding.",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Transaction"
+        ],
+        "summary": "Broadcast transaction (sync)",
+        "parameters": [
+          {
+            "description": "Hex-encoded transaction",
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/rpc.BroadcastTxRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.CometRPCResponse"
+            }
+          },
+          "400": {
+            "description": "invalid request body or missing tx field",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_txDecode": {
+      "post": {
+        "description": "Decodes a raw hex-encoded Tachi transaction without broadcasting it. Returns the parsed fields.",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Transaction"
+        ],
+        "summary": "Decode transaction",
+        "parameters": [
+          {
+            "description": "Raw tx hex",
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/rpc.TxHexRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.TxDecodeResponse"
+            }
+          },
+          "400": {
+            "description": "invalid request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_txRaw": {
+      "get": {
+        "description": "Returns the raw hex-encoded transaction bytes for a hash. Looks up the tx in CometBFT's committed store first; on miss, scans the unconfirmed mempool. Mirrors bitcoind's getrawtransaction (verbose=false) but for Tachi's native transaction type.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Transaction"
+        ],
+        "summary": "Get raw transaction",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Transaction hash (40-char hex, CometBFT tmhash)",
+            "name": "hash",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.GetRawTransactionResponse"
+            }
+          },
+          "400": {
+            "description": "hash query parameter is required or invalid",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "404": {
+            "description": "transaction not found",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_txValidate": {
+      "post": {
+        "description": "Validates a hex-encoded transaction against the current chain state via CometBFT CheckTx, without broadcasting.",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Transaction"
+        ],
+        "summary": "Validate transaction",
+        "parameters": [
+          {
+            "description": "Raw tx hex",
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/rpc.TxHexRequest"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.TxValidateResponse"
+            }
+          },
+          "400": {
+            "description": "invalid request",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_validators": {
+      "get": {
+        "description": "Returns all validators from the bootstrap registry merged with KDHT-discovered validators.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Validators"
+        ],
+        "summary": "List all registered validators",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.ValidatorsResponse"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_validators/count": {
+      "get": {
+        "description": "Returns the number of validators currently in the bootstrap registry.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Validators"
+        ],
+        "summary": "Get validator count",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.ValidatorCountResponse"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_validators/live": {
+      "get": {
+        "description": "Returns only validators whose peers are currently connected via the overlay network.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Validators"
+        ],
+        "summary": "List live validators",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.LiveValidatorsResponse"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_validators/ready": {
+      "get": {
+        "description": "Long-polls until the expected number of validators have registered or a 60-second timeout expires.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Validators"
+        ],
+        "summary": "Wait for validators to be ready",
+        "parameters": [
+          {
+            "type": "integer",
+            "default": 2,
+            "description": "Number of validators to wait for",
+            "name": "expected",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.ReadyResponse"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_validatorsPower": {
+      "get": {
+        "description": "Forwards to CometBFT's validators endpoint. Returns the current validator set with voting power.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Validators"
+        ],
+        "summary": "Validator set with power",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.CometRPCResponse"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_vtxo": {
+      "get": {
+        "description": "Returns a single VTXO by its 32-byte hex ID.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "VTXO"
+        ],
+        "summary": "VTXO lookup",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "VTXO ID hex (64 chars)",
+            "name": "id",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.VTXOResponse"
+            }
+          },
+          "400": {
+            "description": "id query parameter is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "404": {
+            "description": "vtxo not found",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_vtxoLocked": {
+      "get": {
+        "description": "Returns all VTXOs locked for the given vault address.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "VTXO"
+        ],
+        "summary": "Locked VTXOs by vault",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Vault address (bech32m or hex)",
+            "name": "vault",
+            "in": "query",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.LockedVTXOsResponse"
+            }
+          },
+          "400": {
+            "description": "vault query parameter is required",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "502": {
+            "description": "CometBFT RPC error",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "CometBFT RPC not configured",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_watchtower/receipts": {
+      "get": {
+        "description": "Lists breach receipts. Optional ?vault=<hex> filters by vault; add &state=<n> for a single receipt.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Watchtower"
+        ],
+        "summary": "Watchtower breach receipts",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Vault ID (64-hex)",
+            "name": "vault",
+            "in": "query"
+          },
+          {
+            "type": "integer",
+            "description": "Broadcast state number (requires vault)",
+            "name": "state",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "400": {
+            "description": "invalid vault id or state",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "404": {
+            "description": "receipt not found",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "watchtower disabled",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_watchtower/status": {
+      "get": {
+        "description": "Returns the watchtower mode, last-scanned L1 height, and receipt count.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Watchtower"
+        ],
+        "summary": "Watchtower status",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/github_com_tachibtc_daemon_vault_watchtower.Status"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "watchtower disabled",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "/tachi_ws": {
+      "get": {
+        "description": "Upgrades to a websocket. With ?address= and/or ?vault=, pushes a JSON alert (state \"pending\" as soon as it's accepted into the mempool via CheckTx, then again as \"committed\" once its block durably commits) for every transaction crediting that address or locking funds into that vault. With ?txs=true, pushes that same alert for every transaction chain-wide, unfiltered. With ?blocks=true, also pushes an alert for every durably-committed block. With ?validators=true, also pushes an alert for every new validator registration. With ?vaultId=, also pushes an alert for every watchtower-observed L1 spend of that vault's funding outpoint (legitimate, stale, or anomalous — same population as GET /tachi_watchtower/receipts). At least one filter is required. The connection is push-only; the server never expects client messages.",
+        "tags": [
+          "WebSocket"
+        ],
+        "summary": "Subscribe to live chain alerts",
+        "parameters": [
+          {
+            "type": "string",
+            "description": "Taproot address (bc1p/tb1p/bcrt1p) or public key hex to watch for incoming vouts",
+            "name": "address",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "Vault address to watch for incoming locks",
+            "name": "vault",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "Subscribe to a new-block alert for every durably-committed block",
+            "name": "blocks",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "Subscribe to an alert for every new validator registration",
+            "name": "validators",
+            "in": "query"
+          },
+          {
+            "type": "boolean",
+            "description": "Subscribe to an alert for every transaction chain-wide (pending, then committed), unfiltered by address/vault",
+            "name": "txs",
+            "in": "query"
+          },
+          {
+            "type": "string",
+            "description": "Vault ID (64-hex) to watch for watchtower breach receipts",
+            "name": "vaultId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "no filter supplied, address is invalid, or vaultId is malformed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "403": {
+            "description": "origin not allowed (see SetWSAllowedOrigins)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "too many websocket connections",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "github_com_tachibtc_daemon_vault_refund.Input": {
+      "type": "object",
+      "properties": {
+        "prevout": {
+          "description": "funding outpoint being spent",
+          "allOf": [
+            {
+              "$ref": "#/definitions/github_com_tachibtc_daemon_vault_refund.Prevout"
+            }
+          ]
+        },
+        "sequence": {
+          "description": "nSequence (0 for a cooperative refund; no CSV)",
+          "type": "integer"
+        },
+        "sighashType": {
+          "description": "must be SIGHASH_DEFAULT (0x00)",
+          "type": "integer"
+        },
+        "tapInternalKey": {
+          "description": "x-only(32) hex",
+          "type": "string"
+        },
+        "tapLeafScript": {
+          "description": "exactly one entry: the vault cooperative leaf",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/github_com_tachibtc_daemon_vault_refund.TapLeafScript"
+          }
+        },
+        "tapScriptSig": {
+          "description": "empty in; collected quorum partials out",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/github_com_tachibtc_daemon_vault_refund.TapScriptSig"
+          }
+        },
+        "witnessUtxo": {
+          "description": "the vault P2TR output this input commits to",
+          "allOf": [
+            {
+              "$ref": "#/definitions/github_com_tachibtc_daemon_vault_refund.WitnessUtxo"
+            }
+          ]
+        }
+      }
+    },
+    "github_com_tachibtc_daemon_vault_refund.Output": {
+      "type": "object",
+      "properties": {
+        "script": {
+          "description": "hex",
+          "type": "string"
+        },
+        "value": {
+          "description": "sats",
+          "type": "integer"
+        }
+      }
+    },
+    "github_com_tachibtc_daemon_vault_refund.Prevout": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string"
+        },
+        "index": {
+          "type": "integer"
+        }
+      }
+    },
+    "github_com_tachibtc_daemon_vault_refund.RefundTx": {
+      "type": "object",
+      "properties": {
+        "inputs": {
+          "description": "exactly one (the funding UTXO)",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/github_com_tachibtc_daemon_vault_refund.Input"
+          }
+        },
+        "locktime": {
+          "description": "nLockTime (0 for a cooperative refund)",
+          "type": "integer"
+        },
+        "outputs": {
+          "description": "outputs[0] = to_local, rest = extras",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/github_com_tachibtc_daemon_vault_refund.Output"
+          }
+        },
+        "userSig": {
+          "description": "UserSig is the vault owner's 64-byte BIP-340 signature (hex) over the\ncooperative-leaf sighash. It authenticates the request as the owner's\nintent before the quorum spends signing effort, and is the same signature\nthe caller drops into the finalized cooperative witness. Required.",
+          "type": "string"
+        },
+        "version": {
+          "description": "tx version (2 for CSV-aware refunds)",
+          "type": "integer"
+        }
+      }
+    },
+    "github_com_tachibtc_daemon_vault_refund.TapLeafScript": {
+      "type": "object",
+      "properties": {
+        "controlBlock": {
+          "description": "hex",
+          "type": "string"
+        },
+        "leafVersion": {
+          "type": "integer"
+        },
+        "script": {
+          "description": "hex",
+          "type": "string"
+        }
+      }
+    },
+    "github_com_tachibtc_daemon_vault_refund.TapScriptSig": {
+      "type": "object",
+      "properties": {
+        "leafHash": {
+          "description": "tapleaf hash hex",
+          "type": "string"
+        },
+        "pubkey": {
+          "description": "x-only(32) hex",
+          "type": "string"
+        },
+        "signature": {
+          "description": "64-byte BIP-340 hex",
+          "type": "string"
+        }
+      }
+    },
+    "github_com_tachibtc_daemon_vault_refund.WitnessUtxo": {
+      "type": "object",
+      "properties": {
+        "script": {
+          "description": "hex",
+          "type": "string"
+        },
+        "value": {
+          "description": "sats",
+          "type": "integer"
+        }
+      }
+    },
+    "github_com_tachibtc_daemon_vault_watchtower.Status": {
+      "type": "object",
+      "properties": {
+        "bounty_configured": {
+          "description": "BountyConfigured reports whether a sweep-bounty payout script is set\n(required to initiate sweeps).",
+          "type": "boolean"
+        },
+        "last_scanned_height": {
+          "description": "LastScannedHeight is the L1 height the subscriber has scanned through.",
+          "type": "integer"
+        },
+        "mode": {
+          "description": "Mode is \"detection\" (watch + receipt only), \"responder\" (also co-signs\npeers' sweeps), or \"initiator\" (also originates and broadcasts sweeps).",
+          "type": "string"
+        },
+        "receipt_count": {
+          "description": "ReceiptCount is the number of breach receipts on record.",
+          "type": "integer"
+        },
+        "sweep_threshold": {
+          "description": "SweepThreshold is the partial-signature threshold the collector requires.",
+          "type": "integer"
+        }
+      }
+    },
+    "rpc.AddressResponse": {
+      "type": "object",
+      "properties": {
+        "balance_sat": {
+          "description": "BalanceSat is the total unspent balance in satoshis summed across the address's VTXOs.",
+          "type": "integer"
+        },
+        "nonce": {
+          "description": "Nonce is the last used transaction nonce for the address; the next tx should use Nonce+1.",
+          "type": "integer"
+        },
+        "pubkey": {
+          "description": "Pubkey is the normalized 32-byte x-only public key hex for the queried address.",
+          "type": "string"
+        },
+        "vtxo_count": {
+          "description": "VTXOCount is the number of unspent VTXOs owned by the address.",
+          "type": "integer"
+        }
+      }
+    },
+    "rpc.AddressTransactionsResponse": {
+      "type": "object",
+      "properties": {
+        "next_before_height": {
+          "description": "NextBeforeHeight is the cursor to pass as `before_height` on the next call; nil once genesis is reached.",
+          "type": "integer"
+        },
+        "page_size": {
+          "description": "PageSize is the maximum number of transactions the caller asked the scanner to collect.",
+          "type": "integer"
+        },
+        "pubkey": {
+          "description": "Pubkey is the normalized 32-byte x-only public key hex the transactions are filtered by.",
+          "type": "string"
+        },
+        "scanned_from_height": {
+          "description": "ScannedFromHeight is the highest block height included in this scan (inclusive).",
+          "type": "integer"
+        },
+        "scanned_to_height": {
+          "description": "ScannedToHeight is the lowest block height included in this scan (inclusive).",
+          "type": "integer"
+        },
+        "transactions": {
+          "description": "Transactions is the page of decoded transactions involving Pubkey, ordered newest-first.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.ListTransactionItem"
+          }
+        }
+      }
+    },
+    "rpc.AddressVTXOsResponse": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "description": "Count is the number of entries returned in VTXOs.",
+          "type": "integer"
+        },
+        "pubkey": {
+          "description": "Pubkey is the normalized 32-byte x-only public key hex the VTXOs are owned by.",
+          "type": "string"
+        },
+        "vtxos": {
+          "description": "VTXOs is the list of matching VTXOs (unspent by default, all when include_spent=true).",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.VTXOItem"
+          }
+        }
+      }
+    },
+    "rpc.BalanceResponse": {
+      "type": "object",
+      "properties": {
+        "balance_sat": {
+          "description": "BalanceSat is the total unspent balance in satoshis owned by Pubkey.",
+          "type": "integer"
+        },
+        "pubkey": {
+          "description": "Pubkey is the normalized 32-byte x-only public key hex whose balance is reported.",
+          "type": "string"
+        }
+      }
+    },
+    "rpc.BitcoinRPCError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "Code is the bitcoind JSON-RPC error code (negative integers per bitcoind convention).",
+          "type": "integer",
+          "example": -8
+        },
+        "message": {
+          "description": "Message is the human-readable error description from bitcoind.",
+          "type": "string",
+          "example": "invalid parameter"
+        }
+      }
+    },
+    "rpc.BitcoinRPCRequest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "ID is the caller-chosen request identifier echoed back in the response.",
+          "type": "string",
+          "example": "1"
+        },
+        "jsonrpc": {
+          "description": "JSONRPC is the JSON-RPC protocol version, fixed at \"1.0\" for bitcoind compatibility.",
+          "type": "string",
+          "example": "1.0"
+        },
+        "method": {
+          "description": "Method is the bitcoind RPC method name to invoke (e.g. \"getblockchaininfo\").",
+          "type": "string",
+          "example": "getblockchaininfo"
+        },
+        "params": {
+          "description": "Params is the raw JSON parameter array forwarded unchanged to bitcoind.",
+          "type": "object"
+        }
+      }
+    },
+    "rpc.BitcoinRPCResponse": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "description": "Error carries the bitcoind error payload when the call failed; nil on success.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/rpc.BitcoinRPCError"
+            }
+          ]
+        },
+        "id": {
+          "description": "ID echoes back the caller-supplied request identifier.",
+          "type": "string",
+          "example": "1"
+        },
+        "result": {
+          "description": "Result is the raw JSON result body from bitcoind; nil when an error occurred.",
+          "type": "object"
+        }
+      }
+    },
+    "rpc.BlockResponse": {
+      "type": "object",
+      "properties": {
+        "epoch": {
+          "description": "Epoch is the epoch ID this block belongs to, derived from height and epochBlocks.",
+          "type": "integer"
+        },
+        "hash": {
+          "description": "Hash is the hex-encoded CometBFT block hash.",
+          "type": "string"
+        },
+        "height": {
+          "description": "Height is the block height described by this response.",
+          "type": "integer"
+        },
+        "time": {
+          "description": "Time is the unix-seconds timestamp of the block header; omitted if unknown.",
+          "type": "integer"
+        },
+        "transactions": {
+          "description": "Transactions is the list of decoded transactions in this block.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.ListTransactionItem"
+          }
+        },
+        "tx_count": {
+          "description": "TxCount is the number of decoded transactions contained in this block.",
+          "type": "integer"
+        }
+      }
+    },
+    "rpc.BlockSummary": {
+      "type": "object",
+      "properties": {
+        "epoch": {
+          "description": "Epoch is the epoch ID this block belongs to, derived from height and epochBlocks.",
+          "type": "integer"
+        },
+        "hash": {
+          "description": "Hash is the hex-encoded CometBFT block hash.",
+          "type": "string"
+        },
+        "height": {
+          "description": "Height is the block height of this summary entry.",
+          "type": "integer"
+        },
+        "time": {
+          "description": "Time is the unix-seconds timestamp of the block header; omitted if unknown.",
+          "type": "integer"
+        },
+        "tx_count": {
+          "description": "TxCount is the number of transactions contained in the block.",
+          "type": "integer"
+        }
+      }
+    },
+    "rpc.BroadcastTxRequest": {
+      "type": "object",
+      "properties": {
+        "tx": {
+          "description": "Tx is the hex-encoded raw transaction bytes to broadcast to CometBFT.",
+          "type": "string",
+          "example": "deadbeef"
+        }
+      }
+    },
+    "rpc.CometRPCResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "ID is the request identifier echoed back by CometBFT.",
+          "type": "integer",
+          "example": 1
+        },
+        "jsonrpc": {
+          "description": "JSONRPC is the JSON-RPC version reported by CometBFT, always \"2.0\".",
+          "type": "string",
+          "example": "2.0"
+        },
+        "result": {
+          "description": "Result is the endpoint-specific result body forwarded verbatim from CometBFT.",
+          "type": "object"
+        }
+      }
+    },
+    "rpc.FeeEstimateResponse": {
+      "type": "object",
+      "properties": {
+        "avg_fee_sat": {
+          "description": "AvgFeeSat is the mean fee in satoshis across transactions in the last 20 blocks scanned.",
+          "type": "integer"
+        },
+        "min_fee_sat": {
+          "description": "MinFeeSat is the minimum acceptable fee in satoshis (currently a flat floor of 1).",
+          "type": "integer"
+        },
+        "recommended_fee_sat": {
+          "description": "RecommendedFeeSat is the suggested fee to use for a new transaction, derived from recent activity.",
+          "type": "integer"
+        }
+      }
+    },
+    "rpc.GetBlockHashResponse": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "description": "Hash is the hex-encoded CometBFT block hash at Height.",
+          "type": "string",
+          "example": "abc..."
+        },
+        "height": {
+          "description": "Height is the height the hash was requested for.",
+          "type": "integer",
+          "example": 42
+        }
+      }
+    },
+    "rpc.GetBlockHeaderResponse": {
+      "type": "object",
+      "properties": {
+        "epoch": {
+          "description": "Epoch is the epoch ID this block belongs to, derived from height and epochBlocks.",
+          "type": "integer",
+          "example": 3
+        },
+        "hash": {
+          "description": "Hash is the hex-encoded CometBFT block hash.",
+          "type": "string",
+          "example": "abc..."
+        },
+        "height": {
+          "description": "Height is the block height.",
+          "type": "integer",
+          "example": 42
+        },
+        "prev_hash": {
+          "description": "PrevHash is the hex-encoded hash of the preceding block (\"\" for the genesis block).",
+          "type": "string",
+          "example": "abc..."
+        },
+        "time": {
+          "description": "Time is the unix-seconds timestamp of the block header.",
+          "type": "integer",
+          "example": 1700000000
+        }
+      }
+    },
+    "rpc.GetEpochResponse": {
+      "type": "object",
+      "properties": {
+        "bitcoin_block_height": {
+          "description": "BitcoinBlockHeight is the L1 block height of the settlement tx, nil until L1-settled or when the bitcoin client is unavailable.",
+          "type": "integer",
+          "x-nullable": true,
+          "example": 800000
+        },
+        "hash": {
+          "description": "Hash is the hex-encoded 32-byte Verkle root committed by this epoch.",
+          "type": "string",
+          "example": "abc..."
+        },
+        "hat_count": {
+          "description": "HATCount is the number of HAT (hash anchor tree) commitments recorded\nin this epoch's Verkle tree.",
+          "type": "integer",
+          "example": 3
+        },
+        "height": {
+          "description": "Height is the sequential EpochID (uint32) of this epoch.",
+          "type": "integer",
+          "example": 42
+        },
+        "l1_settlement_txid": {
+          "description": "L1SettlementTxID is the hex-encoded Bitcoin L1 transaction that settled\nthis epoch's Verkle root; empty until the epoch is L1-settled. Always\nempty today — no code path writes types.Epoch.L1SettlementTx yet, since\nL1 settlement itself isn't implemented. Field is reserved so the\nexplorer indexer's schema doesn't need to change when it lands.",
+          "type": "string",
+          "example": "abc..."
+        },
+        "status": {
+          "description": "Status is the epoch lifecycle label, either \"open\" or \"closed\".",
+          "type": "string",
+          "example": "closed"
+        },
+        "timestamp": {
+          "description": "Timestamp is the unix-seconds time of the closing block, nil for still-open epochs.",
+          "type": "integer",
+          "example": 1700000000
+        },
+        "tx_count": {
+          "description": "TxCount is the number of transactions committed within this epoch.",
+          "type": "integer",
+          "example": 7
+        },
+        "tx_hashes": {
+          "description": "TxHashes is the list of 64-char hex transaction hashes included in this epoch.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "rpc.GetRawTransactionResponse": {
+      "type": "object",
+      "properties": {
+        "hex": {
+          "description": "Hex is the hex-encoded raw transaction bytes.",
+          "type": "string",
+          "example": "01..."
+        },
+        "txHash": {
+          "description": "TxHash is the hex-encoded tmhash of the raw transaction bytes.",
+          "type": "string",
+          "example": "a1b2c3..."
+        }
+      }
+    },
+    "rpc.GetTransactionResponse": {
+      "type": "object",
+      "properties": {
+        "blockhash": {
+          "description": "BlockHash is the hex-encoded committing block hash; nil for mempool/pending txs.",
+          "type": "string",
+          "example": "abc..."
+        },
+        "epoch": {
+          "description": "Epoch is the epoch ID the committing block belongs to; nil for mempool/pending txs.",
+          "type": "integer",
+          "example": 3
+        },
+        "hat": {
+          "description": "HAT is the HAT commitment for the selected input's VTXO — the first\ninput by default, or the input matching ?vtxo_id= when supplied.\nPopulated only when requested via ?hat=true.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/rpc.HATProofResponse"
+            }
+          ]
+        },
+        "hex": {
+          "description": "Hex is the hex-encoded raw transaction bytes.",
+          "type": "string",
+          "example": "01..."
+        },
+        "is_segwit": {
+          "description": "IsSegwit reports whether any input carries witness data (a non-empty\nSigScript). See types.IsSegwit.",
+          "type": "boolean",
+          "example": true
+        },
+        "rip": {
+          "description": "RIP is the raw JSON-encoded RIP (recursive inclusion proof) chaining the\nselected input's HAT — same selection rule as HAT above — origin-epoch\ninclusion up to an L1-settled root. Populated only when requested via\n?rip=true&origin_epoch=N&final_epoch=M.",
+          "type": "object"
+        },
+        "size": {
+          "description": "Size is the byte length of the raw transaction bytes.",
+          "type": "integer",
+          "example": 245
+        },
+        "state": {
+          "description": "State is the lifecycle label derived from Status: \"committed\", \"pending\", or \"failed\".",
+          "type": "string",
+          "example": "committed"
+        },
+        "status": {
+          "description": "Status is the raw ABCI {code, log} pair describing tx execution.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/rpc.TxStatus"
+            }
+          ]
+        },
+        "time": {
+          "description": "Time is the unix-seconds timestamp of the committing block; nil for mempool/pending txs.",
+          "type": "integer",
+          "example": 1700000000
+        },
+        "txHash": {
+          "description": "TxHash is the hex-encoded tmhash of the raw transaction bytes (witness-included; matches types.TxHash).",
+          "type": "string",
+          "example": "a1b2c3..."
+        },
+        "txid": {
+          "description": "TxID is the segwit-style transaction id: TxHash recomputed with every input's\nSigScript (witness) blanked, so malleating a witness does not change it.\nSee types.TxIDNoWitness — a derived, API-facing value only.",
+          "type": "string",
+          "example": "d4e5f6..."
+        },
+        "type": {
+          "description": "Type is the human-readable TachiTx type: transfer (0x01), deposit (0x04),\nwithdraw (0x05), lock (0x06), unlock (0x07), vault_open (0x10),\nvault_state_advance (0x11), vault_close (0x12), vault_breach (0x13), or unknown.",
+          "type": "string",
+          "example": "deposit"
+        },
+        "version": {
+          "description": "Version is the TachiTx protocol version byte.",
+          "type": "integer",
+          "example": 1
+        },
+        "vin": {
+          "description": "Vin lists the VTXO inputs being spent by this transaction.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.TxVin"
+          }
+        },
+        "vout": {
+          "description": "Vout lists the VTXO outputs produced by this transaction.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.TxVout"
+          }
+        },
+        "vsize": {
+          "description": "VSize is the Bitcoin-style virtual size: ceil(Weight/4). See types.VSize.",
+          "type": "integer",
+          "example": 145
+        },
+        "weight": {
+          "description": "Weight is the Bitcoin-style segwit weight: 3*baseSize + totalSize, where\nbaseSize excludes every input's SigScript (witness data). See types.Weight.",
+          "type": "integer",
+          "example": 580
+        }
+      }
+    },
+    "rpc.HATProofResponse": {
+      "type": "object",
+      "properties": {
+        "btc_height": {
+          "description": "BTCHeight is the Bitcoin L1 block height bound into the proof preimage.",
+          "type": "integer",
+          "example": 800000
+        },
+        "btc_timestamp": {
+          "description": "BTCTimestamp is the Bitcoin L1 block timestamp bound into the proof preimage.",
+          "type": "integer",
+          "example": 1700000000
+        },
+        "proof": {
+          "description": "Proof is the hex-encoded SHA256d commitment over the raw finalized PSBT payload.",
+          "type": "string",
+          "example": "abc..."
+        },
+        "vtxo_id": {
+          "description": "VTXOID is the hex-encoded 32-byte VTXO identifier the HAT commits to.",
+          "type": "string",
+          "example": "00..."
+        }
+      }
+    },
+    "rpc.HealthResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "description": "Status is the liveness label; always \"ok\" when the daemon is serving requests.",
+          "type": "string",
+          "example": "ok"
+        },
+        "validators": {
+          "description": "Validators is the count of validators currently in the bootstrap registry.",
+          "type": "integer",
+          "example": 3
+        }
+      }
+    },
+    "rpc.ListBlocksResponse": {
+      "type": "object",
+      "properties": {
+        "blocks": {
+          "description": "Blocks is the page of block summaries, ordered newest-first.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.BlockSummary"
+          }
+        },
+        "page": {
+          "description": "Page is the 1-based page number the caller requested.",
+          "type": "integer"
+        },
+        "page_size": {
+          "description": "PageSize is the maximum number of blocks returned per page (capped at 100).",
+          "type": "integer"
+        },
+        "total": {
+          "description": "Total is the latest block height, used as the total block count for pagination.",
+          "type": "integer"
+        },
+        "total_pages": {
+          "description": "TotalPages is the total number of pages available for the current PageSize.",
+          "type": "integer"
+        }
+      }
+    },
+    "rpc.ListEpochsResponse": {
+      "type": "object",
+      "properties": {
+        "epochs": {
+          "description": "Epochs is the page of epochs returned, ordered latest-first by EpochID.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.GetEpochResponse"
+          }
+        },
+        "page": {
+          "description": "Page is the 1-based page number the caller requested.",
+          "type": "integer"
+        },
+        "page_size": {
+          "description": "PageSize is the maximum number of epochs returned per page (capped at 100).",
+          "type": "integer"
+        },
+        "total": {
+          "description": "Total is the total number of epochs known to the chain (current_epoch + 1).",
+          "type": "integer"
+        },
+        "total_pages": {
+          "description": "TotalPages is the total number of pages available for the current PageSize.",
+          "type": "integer"
+        }
+      }
+    },
+    "rpc.ListTransactionItem": {
+      "type": "object",
+      "properties": {
+        "block_hash": {
+          "description": "BlockHash is the hex-encoded committing block hash; empty for mempool entries.",
+          "type": "string"
+        },
+        "direction": {
+          "description": "Direction is \"sent\" or \"received\" relative to the queried address.\nOnly set by the address-scoped endpoints (GET /tachi_addressTransactions);\nempty on the unscoped GET /tachi_listTransactions, which has no address\nto derive it from.",
+          "type": "string"
+        },
+        "epoch": {
+          "description": "Epoch is the epoch ID the committing block belongs to; nil for mempool/pending txs.",
+          "type": "integer"
+        },
+        "fee": {
+          "description": "Fee is the fee paid by the transaction in satoshis.",
+          "type": "integer"
+        },
+        "has_rip": {
+          "description": "HasRIP reports whether a RIP inclusion proof is available for this tx's\nHAT (its origin epoch has closed and is within maxRIPChainEpochs of the\nlatest closed epoch) without generating the proof itself. False for\npending txs (no epoch yet) and for txs whose origin epoch is too far\nbehind. Fetch the actual proof via\nGET /tachi_tx?rip=true&origin_epoch=&final_epoch=.",
+          "type": "boolean"
+        },
+        "hat": {
+          "description": "HAT is the HAT commitment for the VTXO spent by this tx's first input;\nomitted for txs with no inputs (deposits) or when the proof fetch fails.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/rpc.HATProofResponse"
+            }
+          ]
+        },
+        "height": {
+          "description": "Height is the committing block height, or 0 for mempool entries.",
+          "type": "integer"
+        },
+        "is_segwit": {
+          "description": "IsSegwit reports whether any input carries witness data (a non-empty\nSigScript). See types.IsSegwit.",
+          "type": "boolean"
+        },
+        "size": {
+          "description": "Size is the byte length of the raw transaction bytes.",
+          "type": "integer"
+        },
+        "state": {
+          "description": "State is the lifecycle label: \"committed\" for confirmed txs, \"pending\" for mempool entries.",
+          "type": "string"
+        },
+        "time": {
+          "description": "Time is the unix-seconds timestamp of the committing block; nil for mempool entries.",
+          "type": "integer"
+        },
+        "tx_hash": {
+          "description": "TxHash is the hex-encoded tmhash of the raw transaction bytes.",
+          "type": "string"
+        },
+        "type": {
+          "description": "Type is the human-readable TachiTx type: transfer (0x01), deposit (0x04),\nwithdraw (0x05), lock (0x06), unlock (0x07), vault_open (0x10),\nvault_state_advance (0x11), vault_close (0x12), vault_breach (0x13), or unknown.",
+          "type": "string"
+        },
+        "vin": {
+          "description": "Vin lists the VTXO inputs being spent by this transaction.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.TxVin"
+          }
+        },
+        "vout": {
+          "description": "Vout lists the VTXO outputs produced by this transaction.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.TxVout"
+          }
+        },
+        "vsize": {
+          "description": "VSize is the Bitcoin-style virtual size: ceil(Weight/4). See types.VSize.",
+          "type": "integer"
+        },
+        "weight": {
+          "description": "Weight is the Bitcoin-style segwit weight: 3*baseSize + totalSize. See types.Weight.",
+          "type": "integer"
+        }
+      }
+    },
+    "rpc.ListTransactionsResponse": {
+      "type": "object",
+      "properties": {
+        "next_before_height": {
+          "description": "NextBeforeHeight is the cursor to pass as `before_height` on the next call; nil once genesis is reached.",
+          "type": "integer"
+        },
+        "page_size": {
+          "description": "PageSize is the maximum number of transactions the caller asked the scanner to collect.",
+          "type": "integer"
+        },
+        "scanned_from_height": {
+          "description": "ScannedFromHeight is the highest block height included in this scan (inclusive).",
+          "type": "integer"
+        },
+        "scanned_to_height": {
+          "description": "ScannedToHeight is the lowest block height included in this scan (inclusive).",
+          "type": "integer"
+        },
+        "transactions": {
+          "description": "Transactions is the page of committed transactions, ordered newest-first by block height.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.ListTransactionItem"
+          }
+        }
+      }
+    },
+    "rpc.ListVTXOsResponse": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "description": "Page is the 1-based page number the caller requested.",
+          "type": "integer"
+        },
+        "page_size": {
+          "description": "PageSize is the maximum number of VTXOs returned per page (capped at listVTXOsMaxPageSize).",
+          "type": "integer"
+        },
+        "total": {
+          "description": "Total is the total number of VTXOs across all pages, as reported by the ABCI app.",
+          "type": "integer"
+        },
+        "total_pages": {
+          "description": "TotalPages is the total number of pages available for the current PageSize.",
+          "type": "integer"
+        },
+        "vtxos": {
+          "description": "VTXOs is the page of VTXOs returned, sorted by height descending.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.VTXOResponse"
+          }
+        }
+      }
+    },
+    "rpc.ListVaultsResponse": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "description": "1-based page number returned",
+          "type": "integer"
+        },
+        "page_size": {
+          "description": "maximum entries per page (capped at listVaultsMaxPageSize)",
+          "type": "integer"
+        },
+        "total": {
+          "description": "total vaults User owns across all pages",
+          "type": "integer"
+        },
+        "total_pages": {
+          "description": "total pages available at the current PageSize",
+          "type": "integer"
+        },
+        "user": {
+          "description": "normalized 32-byte x-only pubkey (hex) the vaults are owned by",
+          "type": "string"
+        },
+        "vaults": {
+          "description": "the requested page of vaults owned by User",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.VaultListItem"
+          }
+        }
+      }
+    },
+    "rpc.LiveValidatorsResponse": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "description": "Count is the number of live validators returned.",
+          "type": "integer",
+          "example": 2
+        },
+        "total_known": {
+          "description": "TotalKnown is the total number of validators known to the node (live plus offline).",
+          "type": "integer",
+          "example": 3
+        },
+        "validators": {
+          "description": "Validators is the subset of validators whose peers are currently connected via the overlay network.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.ValidatorInfo"
+          }
+        }
+      }
+    },
+    "rpc.LockedVTXOsResponse": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "description": "Count is the number of entries returned in VTXOs.",
+          "type": "integer"
+        },
+        "vault": {
+          "description": "Vault is the vault address (bech32m or hex) the locked VTXOs are bound to.",
+          "type": "string"
+        },
+        "vtxos": {
+          "description": "VTXOs is the list of VTXOs locked to Vault.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.VTXOResponse"
+          }
+        }
+      }
+    },
+    "rpc.MempoolByAddressResponse": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "description": "Count is the number of entries returned in Transactions.",
+          "type": "integer"
+        },
+        "pubkey": {
+          "description": "Pubkey is the normalized 32-byte x-only public key hex the mempool is filtered by.",
+          "type": "string"
+        },
+        "transactions": {
+          "description": "Transactions is the list of matching pending transactions.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.ListTransactionItem"
+          }
+        }
+      }
+    },
+    "rpc.MempoolResponse": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "description": "Count is the number of pending transactions returned.",
+          "type": "integer"
+        },
+        "transactions": {
+          "description": "Transactions is the list of decoded pending transactions currently in the CometBFT unconfirmed mempool.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.ListTransactionItem"
+          }
+        }
+      }
+    },
+    "rpc.NodeInfoResponse": {
+      "type": "object",
+      "properties": {
+        "chain_id": {
+          "description": "ChainID identifies the chain the node is participating in.",
+          "type": "string"
+        },
+        "epoch_blocks": {
+          "description": "EpochBlocks is the configured number of blocks per Tachi epoch.",
+          "type": "integer"
+        },
+        "latest_block_height": {
+          "description": "LatestBlockHeight is the height of the most recently seen block.",
+          "type": "integer"
+        },
+        "latest_block_time": {
+          "description": "LatestBlockTime is the Unix-seconds timestamp of the latest block, omitted if unknown.",
+          "type": "integer"
+        },
+        "moniker": {
+          "description": "Moniker is the operator-chosen human-readable name for the node.",
+          "type": "string"
+        },
+        "network": {
+          "description": "Network is the network name advertised by the node (mirrors ChainID for CometBFT).",
+          "type": "string"
+        },
+        "node_id": {
+          "description": "NodeID is the CometBFT p2p node identifier.",
+          "type": "string"
+        },
+        "peers": {
+          "description": "Peers is the count of currently connected p2p peers.",
+          "type": "integer"
+        },
+        "sync_status": {
+          "description": "SyncStatus is \"catching_up\" when the node is replaying blocks, \"synced\" otherwise.",
+          "type": "string"
+        },
+        "version": {
+          "description": "Version is the CometBFT node software version reported by /status.",
+          "type": "string"
+        }
+      }
+    },
+    "rpc.ReadyResponse": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "description": "Count is the number of validators in Validators.",
+          "type": "integer",
+          "example": 2
+        },
+        "ready": {
+          "description": "Ready is true once the registry has reached the expected validator count before the long-poll deadline.",
+          "type": "boolean",
+          "example": true
+        },
+        "validators": {
+          "description": "Validators is the current bootstrap registry snapshot at the time the long-poll returned.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.ValidatorInfo"
+          }
+        }
+      }
+    },
+    "rpc.RegisterRequest": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "Host is the CometBFT P2P address \"host:port\" the validator listens on.",
+          "type": "string"
+        },
+        "p2p_port": {
+          "description": "P2PPort is the CometBFT P2P listening port advertised by the validator.",
+          "type": "integer"
+        },
+        "peer_id": {
+          "description": "PeerID is the libp2p peer identifier used by the discovery overlay.",
+          "type": "string"
+        },
+        "pub_key_hex": {
+          "description": "PubKeyHex is the compressed secp256k1 validator public key hex used for signed registration.",
+          "type": "string"
+        },
+        "rpc_addr": {
+          "description": "RPCAddr is the daemon RPC listen address (\"host:port\") this validator serves.",
+          "type": "string"
+        },
+        "signature": {
+          "description": "Signature is the BIP-340 Schnorr signature (128-char hex) over the canonical register digest.",
+          "type": "string"
+        },
+        "timestamp": {
+          "description": "Timestamp is the unix-seconds time at which the request was signed; checked against registerSigMaxAgeSeconds.",
+          "type": "integer"
+        }
+      }
+    },
+    "rpc.RegisterResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "description": "Status is a fixed acknowledgement string (\"registered\") confirming a successful registration.",
+          "type": "string",
+          "example": "registered"
+        },
+        "total": {
+          "description": "Total is the new total number of validators in the registry after this registration.",
+          "type": "integer",
+          "example": 3
+        }
+      }
+    },
+    "rpc.SearchResponse": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "description": "Result is the matching entity payload; its shape depends on Type."
+        },
+        "type": {
+          "description": "Type is the kind of entity Result matched: one of \"block\", \"epoch\", \"tx\", \"vtxo\", or \"address\".",
+          "type": "string"
+        }
+      }
+    },
+    "rpc.SignTransactionResponse": {
+      "type": "object",
+      "properties": {
+        "refund": {
+          "description": "Refund is the refund transaction with the quorum partial signatures attached.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/github_com_tachibtc_daemon_vault_refund.RefundTx"
+            }
+          ]
+        },
+        "signatures": {
+          "description": "Signatures is the number of quorum partial signatures collected.",
+          "type": "integer",
+          "example": 5
+        }
+      }
+    },
+    "rpc.StatsResponse": {
+      "type": "object",
+      "properties": {
+        "chain_id": {
+          "description": "ChainID identifies the chain (mirrors CometBFT's node_info.network).",
+          "type": "string"
+        },
+        "current_epoch": {
+          "description": "CurrentEpoch is the currently open epoch ID.",
+          "type": "integer"
+        },
+        "height": {
+          "description": "Height is the latest committed block height reported by the ABCI app.",
+          "type": "integer"
+        },
+        "latest_block_time": {
+          "description": "LatestBlockTime is the unix-seconds timestamp of the latest block; omitted when unknown.",
+          "type": "integer"
+        },
+        "node_count": {
+          "description": "NodeCount is the number of validator nodes known via KDHT, plus self.",
+          "type": "integer"
+        },
+        "total_accounts": {
+          "description": "TotalAccounts is the number of distinct accounts; currently always 0 pending an ABCI owner-count path.",
+          "type": "integer"
+        },
+        "total_supply_sat": {
+          "description": "TotalSupplySat is the total circulating supply in satoshis (sum of unspent VTXO amounts).",
+          "type": "integer"
+        },
+        "total_transactions": {
+          "description": "TotalTransactions is the cumulative count of transactions across all epoch commits.",
+          "type": "integer"
+        },
+        "vtxo_count": {
+          "description": "VTXOCount is the total number of unspent VTXOs across the chain.",
+          "type": "integer"
+        }
+      }
+    },
+    "rpc.SupplyResponse": {
+      "type": "object",
+      "properties": {
+        "total_supply_sat": {
+          "description": "TotalSupplySat is the total circulating supply in satoshis (sum of all unspent VTXO amounts).",
+          "type": "integer"
+        },
+        "vtxo_count": {
+          "description": "VTXOCount is the total number of unspent VTXOs across the chain.",
+          "type": "integer"
+        }
+      }
+    },
+    "rpc.TxDecodeResponse": {
+      "type": "object",
+      "properties": {
+        "fee": {
+          "description": "Fee is the fee paid by the transaction in satoshis.",
+          "type": "integer"
+        },
+        "is_segwit": {
+          "description": "IsSegwit reports whether any input carries witness data (a non-empty\nSigScript). See types.IsSegwit.",
+          "type": "boolean"
+        },
+        "nonce": {
+          "description": "Nonce is the sender's transaction nonce as committed by the signer.",
+          "type": "integer"
+        },
+        "pubkey": {
+          "description": "PubKey is the hex-encoded signer public key authorizing the transaction.",
+          "type": "string"
+        },
+        "size": {
+          "description": "Size is the byte length of the decoded raw transaction.",
+          "type": "integer"
+        },
+        "tx_hash": {
+          "description": "TxHash is the hex-encoded tmhash of the raw transaction bytes.",
+          "type": "string"
+        },
+        "type": {
+          "description": "Type is the human-readable TachiTx type: transfer (0x01), deposit (0x04),\nwithdraw (0x05), lock (0x06), unlock (0x07), vault_open (0x10),\nvault_state_advance (0x11), vault_close (0x12), vault_breach (0x13), or unknown.",
+          "type": "string"
+        },
+        "version": {
+          "description": "Version is the TachiTx protocol version byte.",
+          "type": "integer"
+        },
+        "vin": {
+          "description": "Vin lists the VTXO inputs being spent by this transaction.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.TxVin"
+          }
+        },
+        "vout": {
+          "description": "Vout lists the VTXO outputs produced by this transaction.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.TxVout"
+          }
+        },
+        "vsize": {
+          "description": "VSize is the Bitcoin-style virtual size: ceil(Weight/4). See types.VSize.",
+          "type": "integer"
+        },
+        "weight": {
+          "description": "Weight is the Bitcoin-style segwit weight: 3*baseSize + totalSize. See types.Weight.",
+          "type": "integer"
+        }
+      }
+    },
+    "rpc.TxHexRequest": {
+      "type": "object",
+      "properties": {
+        "hex": {
+          "description": "Hex is the hex-encoded raw transaction bytes to decode or validate.",
+          "type": "string",
+          "example": "01..."
+        }
+      }
+    },
+    "rpc.TxStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "Code is the ABCI execution code; 0 means success, non-zero means the tx failed.",
+          "type": "integer",
+          "example": 0
+        },
+        "log": {
+          "description": "Log is the ABCI execution log; \"pending\" for mempool txs, FinalizeBlock log otherwise.",
+          "type": "string",
+          "example": ""
+        }
+      }
+    },
+    "rpc.TxValidateResponse": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "description": "Code is the raw ABCI CheckTx response code; non-zero indicates rejection.",
+          "type": "integer"
+        },
+        "log": {
+          "description": "Log is the human-readable CheckTx log message explaining acceptance or rejection.",
+          "type": "string"
+        },
+        "valid": {
+          "description": "Valid is true when CometBFT CheckTx returned code 0 (transaction is acceptable).",
+          "type": "boolean"
+        }
+      }
+    },
+    "rpc.TxVin": {
+      "type": "object",
+      "properties": {
+        "sig_script": {
+          "description": "SigScript is the hex-encoded signature script authorizing the spend.",
+          "type": "string",
+          "example": ""
+        },
+        "txid": {
+          "description": "Txid is the hex-encoded 32-byte parent transaction hash that created the VTXO.",
+          "type": "string",
+          "example": "00..."
+        },
+        "value_sats": {
+          "description": "ValueSats is the satoshi value committed by the input from the spent VTXO.",
+          "type": "integer",
+          "example": 100000
+        },
+        "vout": {
+          "description": "Vout is the zero-based output index within the parent transaction.",
+          "type": "integer",
+          "example": 0
+        },
+        "vtxo_id": {
+          "description": "VTXOID is the hex-encoded 32-byte identifier of the VTXO being spent.",
+          "type": "string",
+          "example": "00..."
+        }
+      }
+    },
+    "rpc.TxVout": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "description": "Amount is the value of this output in satoshis.",
+          "type": "integer",
+          "example": 100000
+        },
+        "owner": {
+          "description": "Owner is the hex-encoded public key authorized to spend this output's VTXO.",
+          "type": "string",
+          "example": "02..."
+        },
+        "script": {
+          "description": "Script is the hex-encoded locking script attached to the output.",
+          "type": "string",
+          "example": ""
+        }
+      }
+    },
+    "rpc.VTXOItem": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "description": "Amount is the VTXO value in satoshis.",
+          "type": "integer"
+        },
+        "btc_height": {
+          "description": "BTCHeight is the Bitcoin L1 block height of the deposit that created\nthis VTXO; 0 when not a deposit or not yet populated.",
+          "type": "integer"
+        },
+        "btc_timestamp": {
+          "description": "BTCTimestamp is the Bitcoin L1 block timestamp of the deposit that\ncreated this VTXO; 0 when not a deposit or not yet populated.",
+          "type": "integer"
+        },
+        "height": {
+          "description": "Height is the block height at which this VTXO was created.",
+          "type": "integer"
+        },
+        "id": {
+          "description": "ID is the hex-encoded 32-byte VTXO identifier.",
+          "type": "string"
+        },
+        "locked": {
+          "description": "Locked is true while this VTXO is bound to a vault and not freely spendable.",
+          "type": "boolean"
+        },
+        "owner": {
+          "description": "Owner is the hex-encoded owner public key authorized to spend this VTXO.",
+          "type": "string"
+        },
+        "script": {
+          "description": "Script is the hex-encoded locking script associated with this VTXO.",
+          "type": "string"
+        },
+        "spent": {
+          "description": "Spent is true once this VTXO has been consumed by a confirmed transaction.",
+          "type": "boolean"
+        },
+        "vault_address": {
+          "description": "VaultAddress is the bech32m P2TR vault address when Locked is true\n(stored as the raw bytes of the address string); empty otherwise.",
+          "type": "string"
+        }
+      }
+    },
+    "rpc.VTXOResponse": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "description": "Amount is the VTXO value in satoshis.",
+          "type": "integer"
+        },
+        "btc_height": {
+          "description": "BTCHeight is the Bitcoin L1 block height of the deposit that created\nthis VTXO; 0 when not a deposit or not yet populated by the L1 watcher.",
+          "type": "integer"
+        },
+        "btc_timestamp": {
+          "description": "BTCTimestamp is the Bitcoin L1 block timestamp of the deposit that\ncreated this VTXO; 0 when not a deposit or not yet populated.",
+          "type": "integer"
+        },
+        "height": {
+          "description": "Height is the block height at which this VTXO was created.",
+          "type": "integer"
+        },
+        "id": {
+          "description": "ID is the hex-encoded 32-byte VTXO identifier.",
+          "type": "string"
+        },
+        "locked": {
+          "description": "Locked is true while this VTXO is locked to a vault.",
+          "type": "boolean"
+        },
+        "owner": {
+          "description": "Owner is the hex-encoded owner public key authorized to spend this VTXO.",
+          "type": "string"
+        },
+        "script": {
+          "description": "Script is the hex-encoded locking script associated with this VTXO.",
+          "type": "string"
+        },
+        "spent": {
+          "description": "Spent is true once this VTXO has been consumed by a confirmed transaction.",
+          "type": "boolean"
+        },
+        "vault_address": {
+          "description": "VaultAddress is the bech32m P2TR vault address this VTXO is locked\nto (stored as the raw bytes of the address string); empty when\nLocked is false.",
+          "type": "string"
+        }
+      }
+    },
+    "rpc.ValidatorCountResponse": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "description": "Count is the number of validators currently in the bootstrap registry.",
+          "type": "integer",
+          "example": 3
+        }
+      }
+    },
+    "rpc.ValidatorInfo": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "Host is the CometBFT P2P address \"host:port\" the validator listens on.",
+          "type": "string"
+        },
+        "p2p_port": {
+          "description": "P2PPort is the CometBFT P2P listening port advertised by the validator.",
+          "type": "integer"
+        },
+        "peer_id": {
+          "description": "PeerID is the libp2p peer identifier used by the discovery overlay.",
+          "type": "string"
+        },
+        "pub_key_hex": {
+          "description": "PubKeyHex is the compressed secp256k1 validator public key hex used for signed registration.",
+          "type": "string"
+        },
+        "rpc_addr": {
+          "description": "RPCAddr is the daemon RPC listen address (\"host:port\") this validator serves.",
+          "type": "string"
+        }
+      }
+    },
+    "rpc.ValidatorsResponse": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "description": "Count is the total number of validators in the response.",
+          "type": "integer",
+          "example": 3
+        },
+        "validators": {
+          "description": "Validators is the merged list of bootstrap-registered and KDHT-discovered validators.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rpc.ValidatorInfo"
+          }
+        }
+      }
+    },
+    "rpc.VaultListItem": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "description": "bech32m P2TR vault address; the ?vault= websocket filter key",
+          "type": "string"
+        },
+        "csv_delay": {
+          "description": "CSVDelay, Threshold, QuorumKeyset and UserKey are the vault's\nreconstruction parameters (an SDK needs them to deterministically\nrebuild the vault's locking script for recovery). They disclose the\nvault's spending policy, so they're only populated when the caller\nauthenticates with X-Api-Key (see Server.vaultAPIKeyMatches) —\nomitted (zero-valued, hence dropped by omitempty) otherwise.",
+          "type": "integer"
+        },
+        "funding_txid": {
+          "description": "hex L1 funding txid",
+          "type": "string"
+        },
+        "funding_vout": {
+          "description": "L1 funding output index",
+          "type": "integer"
+        },
+        "latest_state_num": {
+          "description": "LatestStateNum is always 0 today for the same reason as State.",
+          "type": "integer"
+        },
+        "name": {
+          "description": "Name is the display label set at open. Not unique — key on VaultID.\nUntrusted: chosen by the vault opener and may contain HTML\nmetacharacters. Escape it for the render context before displaying.",
+          "type": "string"
+        },
+        "quorum_keyset": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "state": {
+          "description": "State is always \"open\" today: TxVaultStateAdvance (0x11), the only writer\nof closing/closed/breaching/breach_resolved, is not yet wired. Don't\nbuild lifecycle logic on this field until state transitions land.",
+          "type": "string"
+        },
+        "threshold": {
+          "type": "integer"
+        },
+        "user_key": {
+          "type": "string"
+        },
+        "vault_id": {
+          "description": "hex VaultID = H(funding_txid || vout)",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Validators"
+    },
+    {
+      "name": "Peer"
+    },
+    {
+      "name": "Bitcoin"
+    },
+    {
+      "name": "CometProxy"
+    }
+  ]
+}

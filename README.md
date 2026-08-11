@@ -16,7 +16,7 @@ npm install @tachibtc/sdk
 import { TachiClient } from "@tachibtc/sdk";
 
 const client = new TachiClient({
-  baseUrl: "https://rpc-devnet.tachibtc.com",
+  baseUrl: "https://rpc-regtest.tachibtc.com", // or "https://rpc-signet.tachibtc.com"
 });
 
 // Health check
@@ -171,7 +171,7 @@ GET /tachi_addressVtxos failed: 400 Bad Request — address "bc1q…" is not a t
 Timeouts and transport failures name the endpoint and host, and keep the original error as `cause`:
 
 ```
-GET /health timed out after 30000ms (rpc-devnet.tachibtc.com)
+GET /health timed out after 30000ms (rpc-regtest.tachibtc.com)
 ```
 
 > **A resolved promise is not always success.** `query()`, `broadcastTxAsync()`, `broadcastTxSync()`, and `bitcoinRPC()` pass through protocols that report failures *inside* an HTTP 200. Check `result.response.code` / `result.code` (with `result.log`) for the CometBFT calls, and `error !== null` for `bitcoinRPC()`. Only HTTP-level failures reject.
