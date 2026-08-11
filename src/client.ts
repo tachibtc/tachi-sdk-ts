@@ -21,6 +21,27 @@ import type {
 /** Cap on how much of a daemon error body is quoted back in a thrown Error. */
 const ERROR_BODY_MAX_CHARS = 500;
 
+/**
+ * Is this hostname a genuine loopback address?
+ *
+ * Deliberately strict: a prefix test like `/^127\./` also matches DNS names
+ * such as `127.evil.com` or `127.0.0.1.attacker.com`, which resolve to
+ * whatever the owner points them at. Treating those as loopback would let an
+ * attacker who can influence `baseUrl` — via an env var, a config file, or a
+ * user-supplied custom-RPC field — disable the HTTPS requirement for API keys.
+ *
+ * `URL` normalizes shorthand and octal forms (`127.1`, `0177.0.0.1`) to
+ * dotted-quad and IPv6 loopback to `[::1]` before we see them, so matching a
+ * full dotted-quad plus the two literals is sufficient.
+ */
+function isLoopbackHost(hostname: string): boolean {
+  if (hostname === "localhost" || hostname === "::1" || hostname === "[::1]") return true;
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname);
+  if (!m) return false;
+  const octets = m.slice(1, 5).map(Number);
+  return octets.every((o) => o <= 255) && octets[0] === 127;
+}
+
 /** Turn optional pagination options into query-string entries. */
 function pageQuery(params?: PageParams): Record<string, string> {
   const qs: Record<string, string> = {};
@@ -86,12 +107,7 @@ export class TachiClient {
    */
   private assertSecureForAuth(): void {
     const { protocol, hostname } = new URL(this.baseUrl);
-    const isLoopback =
-      hostname === "localhost" ||
-      hostname === "::1" ||
-      hostname === "[::1]" ||
-      /^127\./.test(hostname);
-    if (protocol !== "https:" && !isLoopback) {
+    if (protocol !== "https:" && !isLoopbackHost(hostname)) {
       throw new Error(
         `Refusing to send an API key over ${protocol}// to non-loopback host ${hostname}; use https.`,
       );

@@ -181,6 +181,57 @@ describe("TachiClient", () => {
       }
     });
 
+    // A prefix test like /^127\./ also matches DNS names that merely start with
+    // "127." and resolve wherever the owner points them. Each of these would
+    // have passed the old check and leaked the key in cleartext.
+    it("rejects hostnames that only look like loopback", async () => {
+      const impostors = [
+        "http://127.evil.com",
+        "http://127.0.0.1.attacker.com",
+        "http://127.0.0.1.evil.co.uk",
+        "http://localhost.evil.com",
+        "http://notlocalhost",
+      ];
+      for (const base of impostors) {
+        const mock = createMockFetch(vaultBody);
+        const client = new TachiClient({ baseUrl: base, fetch: mock.fn });
+        await assert.rejects(
+          () => client.listVaults("bcrt1p...", { apiKey: "secret" }),
+          /Refusing to send an API key/,
+          `${base} must not be treated as loopback`,
+        );
+        assert.equal(mock.calls.length, 0, `${base} must not hit the network`);
+      }
+    });
+
+    it("rejects out-of-range dotted quads at construction", async () => {
+      // These never reach the loopback check — URL itself refuses them, which
+      // is why the octet bound in isLoopbackHost is belt-and-braces.
+      for (const base of ["http://1270.0.0.1", "http://127.999.0.1"]) {
+        assert.throws(() => new TachiClient({ baseUrl: base }), /Invalid URL/, base);
+      }
+    });
+
+    it("still accepts genuine loopback forms over http", async () => {
+      // URL normalizes shorthand/octal/IPv6 forms before the check sees them.
+      const real = [
+        "http://127.0.0.1:8080",
+        "http://127.1",
+        "http://0177.0.0.1",
+        "http://127.255.255.254",
+        "http://localhost:3000",
+        "http://LOCALHOST",
+        "http://[::1]:8080",
+        "http://[0:0:0:0:0:0:0:1]",
+      ];
+      for (const base of real) {
+        const mock = createMockFetch(vaultBody);
+        const client = new TachiClient({ baseUrl: base, fetch: mock.fn });
+        await client.listVaults("bcrt1p...", { apiKey: "secret" });
+        assert.deepEqual(mock.calls[0].init?.headers, { "X-Api-Key": "secret" }, base);
+      }
+    });
+
     it("allows an apiKey over https to a remote host", async () => {
       const mock = createMockFetch(vaultBody);
       const client = new TachiClient({ baseUrl: "https://daemon.example.com", fetch: mock.fn });
