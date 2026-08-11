@@ -13,9 +13,11 @@ const escapeHtml = (s: string) =>
 const sidebars: SidebarsConfig = {
   docsSidebar: [
     'intro',
+    'go-getting-started',
     'vtxo-quickstart',
     'tutorial',
     'api-reference',
+    'go-api-reference',
     {
       type: 'category',
       label: 'RPC Reference',

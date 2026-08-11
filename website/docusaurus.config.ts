@@ -95,9 +95,18 @@ const config: Config = {
           ],
         },
         {
+          title: 'Go SDK',
+          items: [
+            { label: 'Getting Started (Go)', to: '/go-getting-started' },
+            { label: 'API Reference (Go)', to: '/go-api-reference' },
+            { label: 'pkg.go.dev', href: 'https://pkg.go.dev/github.com/tachibtc/tachi-sdk-go/tachi' },
+          ],
+        },
+        {
           title: 'Links',
           items: [
-            { label: 'GitHub', href: 'https://github.com/tachibtc/tachi-sdk-ts' },
+            { label: 'TypeScript SDK (GitHub)', href: 'https://github.com/tachibtc/tachi-sdk-ts' },
+            { label: 'Go SDK (GitHub)', href: 'https://github.com/tachibtc/tachi-sdk-go' },
             // { label: 'Swagger', href: 'https://rpc-regtest.tachibtc.com/swagger/index.html' },
           ],
         },
