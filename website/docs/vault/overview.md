@@ -48,7 +48,7 @@ import { BitcoinCoreRpcClient, WalletAggregator } from "@tachibtc/taurus-wallet-
 import { createVault, depositToVault, verifyVaultP2tr } from "@tachibtc/taurus-vault-core";
 
 const rpc = new BitcoinCoreRpcClient({
-  url: "http://127.0.0.1:18443",
+  url: "https://rpc-regtest.tachibtc.com/",
 });
 
 const mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
@@ -63,7 +63,7 @@ const userWallet = aggregator.addAccount({ addressType: "p2pkh" });
 const vault = await createVault({
   network: "regtest",
   userWallet,
-  validators: { endpoint: "http://127.0.0.1:26657/validators" },
+  validators: { endpoint: "https://rpc-regtest.tachibtc.com/tachi_validators" }, // or https://rpc-signet.tachibtc.com/tachi_validators for signet
 });
 
 // Verify the P2TR output key was derived correctly
@@ -89,6 +89,5 @@ console.log(deposit.txid);
 | Network | Address Prefix | Description |
 |---------|---------------|-------------|
 | `mainnet` | `bc1p` | Bitcoin mainnet |
-| `testnet` | `tb1p` | Bitcoin testnet |
 | `signet` | `tb1p` | Bitcoin signet |
 | `regtest` | `bcrt1p` | Local regtest |

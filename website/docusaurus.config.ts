@@ -98,7 +98,7 @@ const config: Config = {
           title: 'Links',
           items: [
             { label: 'GitHub', href: 'https://github.com/tachibtc/tachi-sdk-ts' },
-            // { label: 'Swagger', href: 'https://rpc-devnet.tachibtc.com/swagger/index.html' },
+            // { label: 'Swagger', href: 'https://rpc-regtest.tachibtc.com/swagger/index.html' },
           ],
         },
       ],

@@ -15,14 +15,14 @@ End-to-end vault creation — fetches validator keys, builds tapscripts, and der
 const vault = await createVault({
   network: "regtest",
   userWallet,
-  validators: { endpoint: "http://127.0.0.1:26657/validators" },
+  validators: { endpoint: "https://rpc-regtest.tachibtc.com/tachi_validators" }, // or https://rpc-signet.tachibtc.com/tachi_validators for signet
   // csvBlocks: 1008, // optional: override exit-leaf CSV
 });
 ```
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `network` | `VaultNetworkName` | `mainnet` / `testnet` / `signet` / `regtest` |
+| `network` | `VaultNetworkName` | `mainnet` / `signet` / `regtest` |
 | `userWallet` | `Wallet` | Wallet from `@tachibtc/taurus-wallet-aggregator` |
 | `validators` | `{ endpoint: string }` | KDHT validator endpoint |
 | `nodePubkeys` | `string[]` | Alternative: pass pubkeys directly, skip HTTP fetch |

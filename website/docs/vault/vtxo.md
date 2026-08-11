@@ -102,7 +102,7 @@ const tachi = await signTachiTx(draft, userSigner);
 import { broadcastTachiTx, waitForVtxoCommit } from "@tachibtc/taurus-vault-core";
 
 await broadcastTachiTx(tachi, {
-  url: "https://tachi.example.com/tx/broadcast/sync",
+  url: "https://rpc-regtest.tachibtc.com/tachi_txBroadcastSync",
 });
 
 // Optionally wait for inclusion

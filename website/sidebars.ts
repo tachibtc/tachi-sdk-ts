@@ -13,6 +13,7 @@ const escapeHtml = (s: string) =>
 const sidebars: SidebarsConfig = {
   docsSidebar: [
     'intro',
+    'vtxo-quickstart',
     'tutorial',
     'api-reference',
     {
