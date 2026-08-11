@@ -16,7 +16,8 @@ export function buildUrl(server: string, op: Operation, values: Record<string, s
 export function headerParams(op: Operation, values: Record<string, string>): Record<string, string> {
   const headers: Record<string, string> = {};
   for (const p of op.parameters) {
-    if (p.in === "header" && values[p.name]) headers[p.name] = values[p.name];
+    if (p.in !== "header" || !values[p.name]) continue;
+    headers[p.name] = p.name.toLowerCase() === "x-api-key" ? "$TACHI_API_KEY" : values[p.name];
   }
   return headers;
 }
