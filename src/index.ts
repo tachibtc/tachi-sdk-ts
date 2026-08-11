@@ -13,4 +13,12 @@ export type {
   BitcoinRPCRequest,
   BitcoinRPCResponse,
   QueryParams,
+  VTXOResponse,
+  VTXOItem,
+  ListVTXOsResponse,
+  AddressVTXOsResponse,
+  LockedVTXOsResponse,
+  VaultListItem,
+  ListVaultsResponse,
+  PageParams,
 } from "./types";
