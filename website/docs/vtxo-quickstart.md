@@ -86,7 +86,7 @@ import {
 } from "@tachibtc/taurus-wallet-aggregator";
 
 const rpc = new BitcoinCoreRpcClient({
-  url: "http://tachi:tachi@127.0.0.1:18443",
+  url: "https://rpc-regtest.tachibtc.com/",
 });
 
 // A well-known test mnemonic — NEVER use this outside regtest.
@@ -121,7 +121,7 @@ import { createVault, verifyVaultP2tr } from "@tachibtc/taurus-vault-core";
 const vault = await createVault({
   network: "regtest",
   userWallet,
-  validators: { endpoint: "http://127.0.0.1:26657/validators" },
+  validators: { endpoint: "https://rpc-regtest.tachibtc.com/tachi_validators" }, // or https://rpc-signet.tachibtc.com/tachi_validators for signet
   // csvBlocks: 1008,  // default exit-leaf timelock
 });
 
@@ -287,7 +287,7 @@ import {
   waitForVtxoCommit,
 } from "@tachibtc/taurus-vault-core";
 
-const TACHI_URL = "http://127.0.0.1:26657"; // regtest daemon
+const TACHI_URL = "https://rpc-regtest.tachibtc.com"; // regtest daemon
 const insecure = { allowInsecureHttp: true }; // regtest only — see caution below
 
 // Build + sign the DEPOSIT envelope (nonce 0 for this account's first action).

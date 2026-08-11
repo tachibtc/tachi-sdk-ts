@@ -13,7 +13,7 @@ title: API Reference
 import { TachiClient } from "@tachibtc/sdk";
 
 const client = new TachiClient({
-  baseUrl: "https://rpc-devnet.tachibtc.com",
+  baseUrl: "https://rpc-regtest.tachibtc.com", // or "https://rpc-signet.tachibtc.com"
   timeoutMs: 30000, // optional, default 30s
 });
 ```
@@ -36,7 +36,7 @@ GET /tachi_addressVtxos failed: 400 Bad Request — address "bc1q…" is not a t
 Timeouts and transport failures name the endpoint and host, and keep the original error as `cause`:
 
 ```
-GET /health timed out after 30000ms (rpc-devnet.tachibtc.com)
+GET /health timed out after 30000ms (rpc-regtest.tachibtc.com)
 ```
 
 :::caution

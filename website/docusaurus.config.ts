@@ -70,11 +70,16 @@ const config: Config = {
           label: 'GitHub',
           position: 'right',
         },
-        {
-          href: 'https://rpc-devnet.tachibtc.com/swagger/index.html',
-          label: 'Swagger',
-          position: 'right',
-        },
+        // {
+        //   href: 'https://rpc-regtest.tachibtc.com/swagger/index.html',
+        //   label: 'Regtest Swagger',
+        //   position: 'right',
+        // },
+        // {
+        //   href: 'https://rpc-signet.tachibtc.com/swagger/index.html',
+        //   label: 'Signet Swagger',
+        //   position: 'right',
+        // },
       ],
     },
     footer: {
@@ -86,13 +91,23 @@ const config: Config = {
             { label: 'Getting Started', to: '/' },
             { label: 'Tutorial', to: '/tutorial' },
             { label: 'API Reference', to: '/api-reference' },
+            { label: 'RPC Reference', to: '/rpc-reference' },
+          ],
+        },
+        {
+          title: 'Go SDK',
+          items: [
+            { label: 'Getting Started (Go)', to: '/go-getting-started' },
+            { label: 'API Reference (Go)', to: '/go-api-reference' },
+            { label: 'pkg.go.dev', href: 'https://pkg.go.dev/github.com/tachibtc/tachi-sdk-go/tachi' },
           ],
         },
         {
           title: 'Links',
           items: [
-            { label: 'GitHub', href: 'https://github.com/tachibtc/tachi-sdk-ts' },
-            { label: 'Swagger', href: 'https://rpc-devnet.tachibtc.com/swagger/index.html' },
+            { label: 'TypeScript SDK (GitHub)', href: 'https://github.com/tachibtc/tachi-sdk-ts' },
+            { label: 'Go SDK (GitHub)', href: 'https://github.com/tachibtc/tachi-sdk-go' },
+            // { label: 'Swagger', href: 'https://rpc-regtest.tachibtc.com/swagger/index.html' },
           ],
         },
       ],
