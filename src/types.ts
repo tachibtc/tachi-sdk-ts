@@ -41,10 +41,15 @@ export interface ReadyResponse {
 /**
  * Response from /tachi_validators/register.
  *
- * The SDK has no method for this endpoint: registration requires a BIP-340
- * Schnorr signature over a canonical digest whose construction is not
- * described by the daemon's OpenAPI spec. Call it directly until that is
- * documented.
+ * The SDK deliberately has no method for this endpoint. It is a
+ * bootstrap-node-internal route for validators joining the network, and its
+ * allowlist and signature checks exist to prevent registration-flood abuse —
+ * a convenient wrapper would invite exactly that. This is an intentional
+ * exclusion, not a coverage gap; please don't add one.
+ *
+ * Operators calling it directly sign, with BIP-340 Schnorr, the digest:
+ * sha256("tachi-register-v1\n" + lowercase(pub_key_hex) + "\n" + peer_id +
+ * "\n" + host + "\n" + p2p_port + "\n" + rpc_addr + "\n" + timestamp)
  */
 export interface RegisterResponse {
   status: string;
@@ -160,6 +165,16 @@ export interface BroadcastTxRequest {
   tx: string;
 }
 
+/**
+ * Request body for /tachi_txDecode and /tachi_txValidate.
+ *
+ * These two take `hex` rather than the `tx` field the broadcast endpoints use
+ * — an inconsistency in the daemon, not a typo here.
+ */
+export interface TxHexRequest {
+  hex: string;
+}
+
 /** Request body for the Bitcoin JSON-RPC proxy. */
 export interface BitcoinRPCRequest {
   jsonrpc?: string;
@@ -181,4 +196,377 @@ export interface QueryParams {
   path: string;
   data?: string;
   height?: string;
+}
+
+// ── Address ────────────────────────────────────────────────────────
+
+/** Response from /tachi_address. */
+export interface AddressResponse {
+  /** Normalized 32-byte x-only public key hex. */
+  pubkey: string;
+  balance_sat: number;
+  nonce: number;
+  vtxo_count: number;
+}
+
+/** Response from /tachi_balance. */
+export interface BalanceResponse {
+  pubkey: string;
+  balance_sat: number;
+}
+
+// ── Transactions ───────────────────────────────────────────────────
+
+/** A transaction input. */
+export interface TxVin {
+  txid: string;
+  vout: number;
+  vtxo_id: string;
+  sig_script: string;
+  value_sats: number;
+}
+
+/** A transaction output. */
+export interface TxVout {
+  owner: string;
+  amount: number;
+  script: string;
+}
+
+/** CheckTx/DeliverTx result code and log. */
+export interface TxStatus {
+  code: number;
+  log: string;
+}
+
+/** A Hash-Anchored Timestamp proof. */
+export interface HATProofResponse {
+  vtxo_id: string;
+  proof: string;
+  btc_height: number;
+  btc_timestamp: number;
+}
+
+/** A transaction as returned by the list, block, and mempool endpoints. */
+export interface ListTransactionItem {
+  tx_hash: string;
+  type: string;
+  state: string;
+  direction: string;
+  height: number;
+  block_hash: string;
+  epoch: number;
+  time: number;
+  fee: number;
+  size: number;
+  vsize: number;
+  weight: number;
+  is_segwit: boolean;
+  has_rip: boolean;
+  hat?: HATProofResponse;
+  vin: TxVin[];
+  vout: TxVout[];
+}
+
+/** Response from /tachi_tx. */
+export interface GetTransactionResponse {
+  txid: string;
+  txHash: string;
+  type: string;
+  state: string;
+  hex: string;
+  blockhash: string;
+  epoch: number;
+  time: number;
+  version: number;
+  size: number;
+  vsize: number;
+  weight: number;
+  is_segwit: boolean;
+  status?: TxStatus;
+  hat?: HATProofResponse;
+  rip?: unknown;
+  vin: TxVin[];
+  vout: TxVout[];
+}
+
+/** Response from /tachi_txRaw. */
+export interface GetRawTransactionResponse {
+  txHash: string;
+  hex: string;
+}
+
+/**
+ * Cursor-paginated transaction list.
+ *
+ * `next_before_height` is the cursor for the following page — pass it back as
+ * `before_height`. A zero/absent value means there are no more pages.
+ */
+export interface ListTransactionsResponse {
+  transactions: ListTransactionItem[];
+  page_size: number;
+  next_before_height: number;
+  /** Height range the daemon walked to build this page. */
+  scanned_from_height: number;
+  scanned_to_height: number;
+}
+
+/** Response from /tachi_addressTransactions. */
+export interface AddressTransactionsResponse extends ListTransactionsResponse {
+  pubkey: string;
+}
+
+/** Response from /tachi_mempool. */
+export interface MempoolResponse {
+  count: number;
+  transactions: ListTransactionItem[];
+}
+
+/** Response from /tachi_mempoolByAddress. */
+export interface MempoolByAddressResponse extends MempoolResponse {
+  pubkey: string;
+}
+
+/** Response from /tachi_txDecode. */
+export interface TxDecodeResponse {
+  tx_hash: string;
+  type: string;
+  pubkey: string;
+  nonce: number;
+  fee: number;
+  version: number;
+  size: number;
+  vsize: number;
+  weight: number;
+  is_segwit: boolean;
+  vin: TxVin[];
+  vout: TxVout[];
+}
+
+/** Response from /tachi_txValidate. */
+export interface TxValidateResponse {
+  valid: boolean;
+  code: number;
+  log: string;
+}
+
+/** Response from /tachi_feeEstimate. */
+export interface FeeEstimateResponse {
+  recommended_fee_sat: number;
+  avg_fee_sat: number;
+  min_fee_sat: number;
+}
+
+// ── Blocks ─────────────────────────────────────────────────────────
+
+/** Response from /tachi_block and /tachi_getBlock. */
+export interface BlockResponse {
+  height: number;
+  hash: string;
+  time: number;
+  epoch: number;
+  tx_count: number;
+  transactions: ListTransactionItem[];
+}
+
+/** A block without its transaction bodies. */
+export interface BlockSummary {
+  height: number;
+  hash: string;
+  time: number;
+  epoch: number;
+  tx_count: number;
+}
+
+/** Response from /tachi_listBlocks. */
+export interface ListBlocksResponse {
+  blocks: BlockSummary[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+}
+
+/** Response from /tachi_getBlockHash. */
+export interface GetBlockHashResponse {
+  height: number;
+  hash: string;
+}
+
+/** Response from /tachi_getBlockHeader. */
+export interface GetBlockHeaderResponse {
+  height: number;
+  hash: string;
+  prev_hash: string;
+  time: number;
+  epoch: number;
+}
+
+// ── Epochs ─────────────────────────────────────────────────────────
+
+/** Response from /tachi_epoch. */
+export interface GetEpochResponse {
+  height: number;
+  hash: string;
+  status: string;
+  timestamp: number;
+  tx_count: number;
+  tx_hashes: string[];
+  hat_count: number;
+  /** Null until the epoch is anchored to a Bitcoin block. */
+  bitcoin_block_height: number | null;
+  /** Hex L1 settlement txid; empty until the epoch settles. */
+  l1_settlement_txid: string;
+}
+
+/** Response from /tachi_listEpochs. */
+export interface ListEpochsResponse {
+  epochs: GetEpochResponse[];
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+}
+
+// ── Dashboard & stats ──────────────────────────────────────────────
+
+/** Response from /tachi_stats. */
+export interface StatsResponse {
+  chain_id: string;
+  height: number;
+  current_epoch: number;
+  latest_block_time: number;
+  node_count: number;
+  total_accounts: number;
+  total_transactions: number;
+  total_supply_sat: number;
+  vtxo_count: number;
+}
+
+/** Response from /tachi_supply. */
+export interface SupplyResponse {
+  total_supply_sat: number;
+  vtxo_count: number;
+}
+
+/**
+ * Response from /tachi_search.
+ *
+ * `type` discriminates what `result` holds — e.g. `"block"`, `"tx"`,
+ * `"address"`, `"vtxo"`. Narrow on it before using `result`.
+ */
+export interface SearchResponse {
+  type: string;
+  result: unknown;
+}
+
+/** Response from /tachi_nodeInfo. */
+export interface NodeInfoResponse {
+  node_id: string;
+  moniker: string;
+  network: string;
+  chain_id: string;
+  version: string;
+  latest_block_height: number;
+  latest_block_time: number;
+  epoch_blocks: number;
+  peers: number;
+  sync_status: string;
+}
+
+// ── Watchtower ─────────────────────────────────────────────────────
+
+/** Response from /tachi_watchtower/status. */
+export interface WatchtowerStatus {
+  mode: string;
+  last_scanned_height: number;
+  receipt_count: number;
+  sweep_threshold: number;
+  bounty_configured: boolean;
+}
+
+// ── Vault refund signing ───────────────────────────────────────────
+
+/** A refund transaction input awaiting signatures. */
+export interface RefundInput {
+  /** The outpoint being spent. */
+  prevout: { hash: string; index: number };
+  sequence: number;
+  /** Value and script of the output being spent. */
+  witnessUtxo: { value: number; script: string };
+  tapLeafScript: TapLeafScript[];
+  /** Hex x-only internal key. */
+  tapInternalKey: string;
+  sighashType: number;
+  /** Signatures already collected for this input. */
+  tapScriptSig?: TapScriptSig[];
+}
+
+/** A taproot leaf script and its control block. */
+export interface TapLeafScript {
+  leafVersion: number;
+  script: string;
+  controlBlock: string;
+}
+
+/** A taproot script-path signature. */
+export interface TapScriptSig {
+  pubkey: string;
+  leafHash: string;
+  signature: string;
+}
+
+/** A refund transaction output. */
+export interface RefundOutput {
+  value: number;
+  script: string;
+}
+
+/** Request body for /tachi_signTransaction. */
+export interface RefundTx {
+  version: number;
+  locktime: number;
+  inputs: RefundInput[];
+  outputs: RefundOutput[];
+  userSig: string;
+}
+
+/** Response from /tachi_signTransaction. */
+export interface SignTransactionResponse {
+  /** The refund transaction with daemon signatures attached. */
+  refund: RefundTx;
+  /** Number of signatures the daemon contributed. */
+  signatures: number;
+}
+
+// ── Real-time events ───────────────────────────────────────────────
+
+/**
+ * Filters for the `/tachi_ws` event stream. At least one is required — the
+ * daemon rejects a filterless connection.
+ */
+export interface WatchFilters {
+  /** Taproot address or pubkey hex: transactions crediting it. */
+  address?: string;
+  /** Vault address: transactions locking funds into it. */
+  vault?: string;
+  /** Vault ID: watchtower-observed L1 spends of its funding outpoint. */
+  vaultId?: string;
+  /** Every durably-committed block. */
+  blocks?: boolean;
+  /** Every new validator registration. */
+  validators?: boolean;
+}
+
+/**
+ * An event pushed over `/tachi_ws`.
+ *
+ * `event` discriminates the payload — `"block"`, `"tx"`, `"validator"`, and
+ * watchtower spend alerts. Transaction alerts arrive twice: `state: "pending"`
+ * on CheckTx acceptance, then `state: "committed"` once the block durably
+ * commits. The stream is push-only; the daemon never expects client messages.
+ */
+export interface TachiEvent {
+  event: string;
+  [key: string]: unknown;
 }

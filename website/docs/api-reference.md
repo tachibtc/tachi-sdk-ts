@@ -172,7 +172,17 @@ console.log(ready.ready); // true or false
 
 ### Validator registration
 
-`POST /tachi_validators/register` is **not** exposed by the SDK. The daemon requires a BIP-340 Schnorr signature over a canonical register digest whose construction isn't described by the OpenAPI spec, so the SDK can't build a correct request. Call the endpoint directly until that's documented.
+`POST /tachi_validators/register` is **not** exposed by the SDK, and deliberately stays that way.
+
+:::warning Deliberate exclusion, not a coverage gap
+This is a bootstrap-node-internal endpoint for validators joining the network. Its allowlist and signature checks exist to prevent registration-flood abuse, and a convenient SDK wrapper would invite exactly that. Please don't add it in a future "complete the coverage" pass.
+:::
+
+Operators who legitimately need it should call it directly. The signature is BIP-340 Schnorr over:
+
+```
+sha256("tachi-register-v1\n" + lowercase(pub_key_hex) + "\n" + peer_id + "\n" + host + "\n" + p2p_port + "\n" + rpc_addr + "\n" + timestamp)
+```
 
 ---
 
@@ -410,3 +420,173 @@ This proxies **any** Bitcoin RPC method, including privileged ones like `sendtoa
 | `result` | `T` | RPC result |
 | `error` | `{code, message} \| null` | Error if any |
 | `id` | `string` | Request ID |
+
+---
+
+## Address
+
+### `getAddress(address)` / `getBalance(address)` / `getNonce(address)`
+
+Balance, nonce, and VTXO count for a Taproot address or public key hex.
+
+```ts
+const { balance_sat, nonce, vtxo_count } = await client.getAddress("bcrt1p...");
+```
+
+**Returns:** `AddressResponse` / `BalanceResponse` / `Record<string, unknown>`
+
+---
+
+### `getAddressTransactions(address, options?)`
+
+Transactions involving an address, newest first.
+
+:::danger Full-chain scan
+The daemon has no address index and walks every block. Measured at ~17s on a ~115k-block chain for an address with 2 matching transactions. Always pass `pageSize` and page with the `next_before_height` cursor.
+:::
+
+```ts
+let cursor: number | undefined;
+do {
+  const page = await client.getAddressTransactions(addr, { pageSize: 25, beforeHeight: cursor });
+  handle(page.transactions);
+  cursor = page.next_before_height || undefined;
+} while (cursor);
+```
+
+**Returns:** `AddressTransactionsResponse`
+
+---
+
+## Transactions
+
+### `getTransaction(hash, options?)`
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `hat` | `boolean` | Include the Hash-Anchored Timestamp proof |
+| `rip` | `boolean` | Include the RIP payload |
+| `vtxoId` | `string` | Scope the HAT proof to one VTXO |
+| `originEpoch` / `finalEpoch` | `number` | Epoch bounds for proof lookup |
+
+**Returns:** `GetTransactionResponse`
+
+### `getRawTransaction(hash)` — `GetRawTransactionResponse`
+### `listTransactions(options?)` — `ListTransactionsResponse` (same full-chain-scan caveat)
+### `getMempool()` / `getMempoolByAddress(address)` — `MempoolResponse` / `MempoolByAddressResponse`
+### `getFeeEstimate()` — `FeeEstimateResponse`
+
+### `decodeTransaction(tx)` / `validateTransaction(tx)`
+
+Decode or validate raw hex without broadcasting.
+
+:::note
+These two endpoints take a `hex` body field, unlike the broadcast endpoints which take `tx`. The SDK handles this — pass the hex string either way.
+:::
+
+`decodeTransaction` **rejects** on undecodable input (HTTP 400). `validateTransaction` **resolves** with `valid: false` instead — check the field, don't rely on the promise.
+
+---
+
+## Blocks
+
+### `getBlockByHeight(height)` — `BlockResponse`
+### `getBlock({ height | hash })` — `BlockResponse`
+### `getBlockHash(height)` — `GetBlockHashResponse`
+### `getBlockHeader({ height | hash })` — `GetBlockHeaderResponse`
+### `listBlocks(params?)` — `ListBlocksResponse`
+
+`getBlock` and `getBlockHeader` throw before making a request if given neither a height nor a hash.
+
+---
+
+## Epochs
+
+### `getEpoch({ id | hash })`
+
+Requires **exactly one** of `id` or `hash` — there is no "current epoch" form. Use `getStats().current_epoch` to find the latest id. Throws locally if given neither or both.
+
+### `listEpochs(params?)` — `ListEpochsResponse`
+
+:::note
+`bitcoin_block_height` is `null` until the epoch is anchored to a Bitcoin block.
+:::
+
+---
+
+## Dashboard & stats
+
+### `getStats()` — `StatsResponse`
+### `getSupply()` — `SupplyResponse`
+### `getNodeInfo()` — `NodeInfoResponse`
+### `getConsensusState()` / `getValidatorsPower()` — `CometRPCResponse`
+
+### `search(q)`
+
+Resolve a height, hash, address, or VTXO id. Narrow on the returned `type` before using `result`.
+
+```ts
+const hit = await client.search("229917");
+if (hit.type === "block") { /* hit.result is a block */ }
+```
+
+---
+
+## Watchtower
+
+### `getWatchtowerStatus()` — `WatchtowerStatus`
+### `getWatchtowerReceipts({ vault?, state? })` — observed L1 spends of vault funding outpoints
+
+---
+
+## Vault refund signing
+
+### `signTransaction(refund)`
+
+Ask the daemon's quorum to co-sign a vault refund transaction.
+
+**Parameters:** `RefundTx` — the refund carrying the user's signature
+**Returns:** `SignTransactionResponse` — `{ refund, signatures }`
+
+---
+
+## Live events
+
+### `watch(filters, options?)`
+
+Async generator over the daemon's WebSocket push stream.
+
+```ts
+const ac = new AbortController();
+for await (const ev of client.watch({ blocks: true }, { signal: ac.signal })) {
+  console.log(ev.event, ev);
+}
+```
+
+| Filter | Type | Pushes |
+|--------|------|--------|
+| `address` | `string` | Transactions crediting the address |
+| `vault` | `string` | Transactions locking funds into the vault |
+| `vaultId` | `string` | Watchtower-observed L1 spends of the vault's funding outpoint |
+| `blocks` | `boolean` | Every durably-committed block |
+| `validators` | `boolean` | Every new validator registration |
+
+At least one filter is required; `watch()` throws before opening a socket otherwise.
+
+Transaction alerts arrive **twice** — `state: "pending"` on CheckTx acceptance, then `state: "committed"` once the block commits. The stream is push-only; the daemon never expects client messages.
+
+Leaving the loop by any means closes the socket — no separate teardown call.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `signal` | `AbortSignal` | — | Abort to stop the stream and close the socket |
+| `WebSocket` | `typeof WebSocket` | `globalThis.WebSocket` | Custom implementation |
+| `maxQueuedEvents` | `number` | `10000` | Buffer bound while the consumer is busy; `0` disables |
+
+:::caution Node 22+
+Uses the global `WebSocket`, native in Node from v22 (this package's `engines` floor). Pass `options.WebSocket` to supply your own implementation for older runtimes, browsers, or tests.
+:::
+
+:::note Backpressure
+Events arriving between iterations are buffered up to `maxQueuedEvents`. Past that the stream throws rather than growing without bound — mirroring `maxResponseBytes` for HTTP responses. Already-buffered events are delivered before the error surfaces, so nothing legitimately received is discarded.
+:::
