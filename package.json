@@ -1,6 +1,6 @@
 {
   "name": "@tachibtc/sdk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "TypeScript SDK for Tachi BTC daemon RPC",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -34,6 +34,6 @@
     "registry": "https://npm.pkg.github.com"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   }
 }
