@@ -338,6 +338,10 @@ main:has(.rpc-ref-page) .theme-doc-footer {
   top: 0;
 }
 
+.rpc-ref-scope .endpoint-side h2:first-child {
+  margin-top: -126px;
+}
+
 .rpc-ref-scope .code-samples {
   border: 1px solid var(--border);
   background: var(--bg-card);

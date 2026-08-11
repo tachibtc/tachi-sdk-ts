@@ -14,7 +14,7 @@ import type {
 } from "./types";
 
 export interface TachiClientOptions {
-  /** Base URL of the Tachi daemon RPC (e.g. "https://rpc-devnet.tachibtc.com"). */
+  /** Base URL of the Tachi daemon RPC (e.g. "https://rpc-regtest.tachibtc.com" or "https://rpc-signet.tachibtc.com"). */
   baseUrl: string;
   /** Optional custom fetch implementation (defaults to global fetch). */
   fetch?: typeof globalThis.fetch;
@@ -29,7 +29,7 @@ export interface TachiClientOptions {
  * ```ts
  * import { TachiClient } from "@tachibtc/sdk";
  *
- * const client = new TachiClient({ baseUrl: "https://rpc-devnet.tachibtc.com" });
+ * const client = new TachiClient({ baseUrl: "https://rpc-regtest.tachibtc.com" }); // or "https://rpc-signet.tachibtc.com"
  * const health = await client.getHealth();
  * console.log(health.status);
  * ```

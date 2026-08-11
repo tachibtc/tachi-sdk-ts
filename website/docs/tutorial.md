@@ -46,7 +46,7 @@ Start by connecting to the Tachi daemon and making sure the network is ready:
 import { TachiClient } from "@tachibtc/sdk";
 
 const tachi = new TachiClient({
-  baseUrl: "https://rpc-devnet.tachibtc.com",
+  baseUrl: "https://rpc-regtest.tachibtc.com", // or "https://rpc-signet.tachibtc.com"
 });
 
 // Is the node alive?
@@ -219,7 +219,7 @@ const tachiTx = await signTachiTx(draft, userSigner);
 
 // Broadcast to Tachi mempool
 await broadcastTachiTx(tachiTx, {
-  url: "https://rpc-devnet.tachibtc.com/tx/broadcast/sync",
+  url: "https://rpc-regtest.tachibtc.com/tx/broadcast/sync", // or "https://rpc-signet.tachibtc.com/tx/broadcast/sync"
 });
 
 console.log("\nVTXO transfer broadcast!");

@@ -70,11 +70,16 @@ const config: Config = {
           label: 'GitHub',
           position: 'right',
         },
-        {
-          href: 'https://rpc-devnet.tachibtc.com/swagger/index.html',
-          label: 'Swagger',
-          position: 'right',
-        },
+        // {
+        //   href: 'https://rpc-regtest.tachibtc.com/swagger/index.html',
+        //   label: 'Regtest Swagger',
+        //   position: 'right',
+        // },
+        // {
+        //   href: 'https://rpc-signet.tachibtc.com/swagger/index.html',
+        //   label: 'Signet Swagger',
+        //   position: 'right',
+        // },
       ],
     },
     footer: {
@@ -86,13 +91,14 @@ const config: Config = {
             { label: 'Getting Started', to: '/' },
             { label: 'Tutorial', to: '/tutorial' },
             { label: 'API Reference', to: '/api-reference' },
+            { label: 'RPC Reference', to: '/rpc-reference' },
           ],
         },
         {
           title: 'Links',
           items: [
             { label: 'GitHub', href: 'https://github.com/tachibtc/tachi-sdk-ts' },
-            { label: 'Swagger', href: 'https://rpc-devnet.tachibtc.com/swagger/index.html' },
+            // { label: 'Swagger', href: 'https://rpc-devnet.tachibtc.com/swagger/index.html' },
           ],
         },
       ],
