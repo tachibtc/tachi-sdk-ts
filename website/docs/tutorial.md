@@ -46,7 +46,7 @@ Start by connecting to the Tachi daemon and making sure the network is ready:
 import { TachiClient } from "@tachibtc/sdk";
 
 const tachi = new TachiClient({
-  baseUrl: "https://rpc-devnet.tachibtc.com",
+  baseUrl: "https://rpc-regtest.tachibtc.com", // or "https://rpc-signet.tachibtc.com"
 });
 
 // Is the node alive?
@@ -87,7 +87,7 @@ Now switch to `@tachibtc/taurus-wallet-aggregator` to set up a user wallet:
 import { BitcoinCoreRpcClient, WalletAggregator } from "@tachibtc/taurus-wallet-aggregator";
 
 const rpc = new BitcoinCoreRpcClient({
-  url: "http://127.0.0.1:18443", // your regtest bitcoind
+  url: "https://rpc-regtest.tachibtc.com/", // or https://rpc-signet.tachibtc.com/
 });
 
 const mnemonic =
@@ -115,7 +115,7 @@ import { createVault, verifyVaultP2tr } from "@tachibtc/taurus-vault-core";
 const vault = await createVault({
   network: "regtest",
   userWallet,
-  validators: { endpoint: "http://127.0.0.1:26657/validators" },
+  validators: { endpoint: "https://rpc-regtest.tachibtc.com/tachi_validators" }, // or https://rpc-signet.tachibtc.com/tachi_validators for signet network
   // csvBlocks: 1008, // default exit timelock
 });
 
@@ -219,7 +219,7 @@ const tachiTx = await signTachiTx(draft, userSigner);
 
 // Broadcast to Tachi mempool
 await broadcastTachiTx(tachiTx, {
-  url: "https://rpc-devnet.tachibtc.com/tachi_txBroadcastSync",
+  url: "https://rpc-regtest.tachibtc.com/tachi_txBroadcastSync", //"https://rpc-signet.tachibtc.com/tachi_txBroadcastSync"
 });
 
 console.log("\nVTXO transfer broadcast!");

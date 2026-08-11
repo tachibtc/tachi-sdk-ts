@@ -20,7 +20,7 @@ npm install @tachibtc/sdk --registry=https://npm.pkg.github.com
 import { TachiClient } from "@tachibtc/sdk";
 
 const client = new TachiClient({
-  baseUrl: "https://rpc-devnet.tachibtc.com",
+  baseUrl: "https://rpc-regtest.tachibtc.com", // or "https://rpc-signet.tachibtc.com"
 });
 
 // Health check
