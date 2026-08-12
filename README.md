@@ -1,11 +1,11 @@
-# @tachibtc/sdk
+# @tachibtc/tachi-sdk-ts
 
 TypeScript SDK for the Tachi BTC daemon RPC.
 
 ## Installation
 
 ```bash
-npm install @tachibtc/sdk
+npm install @tachibtc/tachi-sdk-ts
 ```
 
 ## Quick Start
@@ -13,7 +13,7 @@ npm install @tachibtc/sdk
 > **Endpoint paths:** every daemon route is namespaced under `tachi_` (e.g. `GET /tachi_status`) except `/health` and the Bitcoin JSON-RPC proxy at `POST /`. If you hand-roll `fetch` calls alongside the SDK, unprefixed paths will 404.
 
 ```ts
-import { TachiClient } from "@tachibtc/sdk";
+import { TachiClient } from "@tachibtc/tachi-sdk-ts";
 
 const client = new TachiClient({
   baseUrl: "https://rpc-regtest.tachibtc.com", // or "https://rpc-signet.tachibtc.com"
