@@ -63,13 +63,6 @@ mkdir first-vtxo && cd first-vtxo
 npm init -y
 ```
 
-Point npm at the `@tachibtc` scope:
-
-```bash title=".npmrc"
-@tachibtc:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
 Install the packages you need:
 
 ```bash
