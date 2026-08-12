@@ -35,7 +35,7 @@
     "url": "https://github.com/tachibtc/tachi-sdk-ts.git"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
   },
   "engines": {
     "node": ">=22"
