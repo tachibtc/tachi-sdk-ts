@@ -1,5 +1,5 @@
 {
-  "name": "@tachibtc/sdk",
+  "name": "@tachibtc/tachi-sdk-ts",
   "version": "0.2.1",
   "description": "TypeScript SDK for Tachi BTC daemon RPC",
   "main": "dist/index.js",

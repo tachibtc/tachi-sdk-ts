@@ -13,7 +13,7 @@ In this tutorial you'll build a TypeScript app that:
 4. Deposits BTC into the vault
 5. Builds and broadcasts a VTXO transfer
 
-By the end you'll have touched both SDKs — `@tachibtc/sdk` for network interaction and `@tachibtc/taurus-vault-core` for vault operations.
+By the end you'll have touched both SDKs — `@tachibtc/tachi-sdk-ts` for network interaction and `@tachibtc/taurus-vault-core` for vault operations.
 
 ## Setup
 
@@ -32,7 +32,7 @@ Configure npm for the `@tachibtc` scope:
 Install both SDKs:
 
 ```bash
-npm install @tachibtc/sdk @tachibtc/taurus-vault-core @tachibtc/taurus-wallet-aggregator
+npm install @tachibtc/tachi-sdk-ts @tachibtc/taurus-vault-core @tachibtc/taurus-wallet-aggregator
 npm install -D typescript tsx @types/node
 ```
 
@@ -43,7 +43,7 @@ Create `app.ts` — we'll build the whole thing in one file.
 Start by connecting to the Tachi daemon and making sure the network is ready:
 
 ```ts
-import { TachiClient } from "@tachibtc/sdk";
+import { TachiClient } from "@tachibtc/tachi-sdk-ts";
 
 const tachi = new TachiClient({
   baseUrl: "https://rpc-regtest.tachibtc.com", // or "https://rpc-signet.tachibtc.com"
@@ -62,7 +62,7 @@ for (const v of live.validators) {
 }
 ```
 
-This uses `@tachibtc/sdk` to talk to the Tachi daemon RPC. Every response is fully typed.
+This uses `@tachibtc/tachi-sdk-ts` to talk to the Tachi daemon RPC. Every response is fully typed.
 
 ## Step 2: Check Bitcoin Chain State
 
@@ -233,7 +233,7 @@ Always use `https://` in production. For local regtest, pass `{ allowInsecureHtt
 
 ```mermaid
 flowchart LR
-    subgraph SDK["@tachibtc/sdk"]
+    subgraph SDK["@tachibtc/tachi-sdk-ts"]
         A[getHealth] --> B[getLiveValidators]
         B --> C[bitcoinRPC]
     end
@@ -251,7 +251,7 @@ flowchart LR
     style VAULT fill:#1a1a1a,stroke:#BC0000,color:#e0e0e0
 ```
 
-- **`@tachibtc/sdk`** — network queries, Bitcoin RPC proxy, transaction broadcast
+- **`@tachibtc/tachi-sdk-ts`** — network queries, Bitcoin RPC proxy, transaction broadcast
 - **`@tachibtc/taurus-vault-core`** — vault creation, P2TR tapscript, VTXO PSBT flow
 - **`@tachibtc/taurus-wallet-aggregator`** — wallet management, key derivation
 

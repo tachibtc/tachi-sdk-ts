@@ -123,7 +123,7 @@ export interface TachiClientOptions {
  *
  * @example
  * ```ts
- * import { TachiClient } from "@tachibtc/sdk";
+ * import { TachiClient } from "@tachibtc/tachi-sdk-ts";
  *
  * const client = new TachiClient({ baseUrl: "https://rpc-regtest.tachibtc.com" }); // or "https://rpc-signet.tachibtc.com"
  * const health = await client.getHealth();
