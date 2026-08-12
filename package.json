@@ -11,7 +11,8 @@
     "build": "tsc",
     "docs": "typedoc",
     "test": "node --import tsx --test src/client.test.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "lint": "eslint ."
   },
   "keywords": [
     "tachi",
@@ -21,17 +22,20 @@
   ],
   "license": "MIT",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^25.6.0",
+    "eslint": "^10.8.1",
     "tsx": "^4.23.12",
     "typedoc": "^0.28.19",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^8.67.0"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/tachibtc/tachi-sdk-ts.git"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
   },
   "engines": {
     "node": ">=22"
