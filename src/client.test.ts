@@ -637,16 +637,19 @@ describe("TachiClient", () => {
     it("uses ws:// for an http baseUrl", async () => {
       const { Fake, instances } = fakeSocket([], { closeAfter: true });
       const client = new TachiClient({ baseUrl: "http://127.0.0.1:8080" });
-      for await (const _ of client.watch({ blocks: true }, { WebSocket: Fake })) break;
+      const stream = client.watch({ blocks: true }, { WebSocket: Fake });
+      await stream.next();
+      await stream.return(undefined);
       assert.ok(String(instances[0].url).startsWith("ws://127.0.0.1:8080/"));
     });
 
     it("requires at least one filter", async () => {
       const client = new TachiClient({ baseUrl: "https://example.com" });
       const { Fake, instances } = fakeSocket([]);
-      await assert.rejects(async () => {
-        for await (const _ of client.watch({}, { WebSocket: Fake })) break;
-      }, /requires at least one filter/);
+      await assert.rejects(
+        () => client.watch({}, { WebSocket: Fake }).next(),
+        /requires at least one filter/,
+      );
       assert.equal(instances.length, 0, "must not open a socket");
     });
 
@@ -737,8 +740,9 @@ describe("TachiClient", () => {
       const { Fake } = fakeSocket([], { error: true });
       const client = new TachiClient({ baseUrl: "https://example.com" });
       await assert.rejects(async () => {
-        for await (const _ of client.watch({ blocks: true }, { WebSocket: Fake })) {
-          // drain
+        const stream = client.watch({ blocks: true }, { WebSocket: Fake });
+        while (!(await stream.next()).done) {
+          // drain until the socket error surfaces
         }
       }, /websocket error/);
     });
@@ -748,8 +752,9 @@ describe("TachiClient", () => {
       const ac = new AbortController();
       const client = new TachiClient({ baseUrl: "https://example.com" });
       const done = (async () => {
-        for await (const _ of client.watch({ blocks: true }, { WebSocket: Fake, signal: ac.signal })) {
-          // never yields
+        const stream = client.watch({ blocks: true }, { WebSocket: Fake, signal: ac.signal });
+        while (!(await stream.next()).done) {
+          // never yields; ends when the abort closes the stream
         }
       })();
       queueMicrotask(() => ac.abort());
