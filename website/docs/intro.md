@@ -11,13 +11,13 @@ TypeScript SDK for the Tachi BTC daemon RPC.
 ## Installation
 
 ```bash
-npm install @tachibtc/sdk --registry=https://npm.pkg.github.com
+npm install @tachibtc/tachi-sdk-ts
 ```
 
 ## Quick Start
 
 ```ts
-import { TachiClient } from "@tachibtc/sdk";
+import { TachiClient } from "@tachibtc/tachi-sdk-ts";
 
 const client = new TachiClient({
   baseUrl: "https://rpc-regtest.tachibtc.com", // or "https://rpc-signet.tachibtc.com"
