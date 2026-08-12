@@ -9,15 +9,6 @@ On-chain building blocks for the Taurus Vault — BIP-341 P2TR address generatio
 
 ## Install
 
-Configure npm for the `@tachibtc` scope:
-
-```bash title=".npmrc"
-@tachibtc:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-Then install:
-
 ```bash
 npm install @tachibtc/taurus-vault-core @tachibtc/taurus-wallet-aggregator
 ```

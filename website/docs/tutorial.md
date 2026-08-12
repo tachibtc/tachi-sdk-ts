@@ -22,13 +22,6 @@ mkdir tachi-app && cd tachi-app
 npm init -y
 ```
 
-Configure npm for the `@tachibtc` scope:
-
-```bash title=".npmrc"
-@tachibtc:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
 Install both SDKs:
 
 ```bash
