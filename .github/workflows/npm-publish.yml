@@ -47,6 +47,10 @@ jobs:
 
       - name: Create GitHub release
         if: steps.check.outputs.publish == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "v${{ steps.check.outputs.version }}" --title "v${{ steps.check.outputs.version }}" --generate-notes
+        # Use the action rather than the gh CLI: the self-hosted runners don't
+        # ship gh, which is what broke the release step (#42).
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.check.outputs.version }}
+          name: v${{ steps.check.outputs.version }}
+          generate_release_notes: true
