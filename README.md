@@ -52,6 +52,8 @@ console.log(info.result);
 - [API Reference](https://tachibtc.github.io/tachi-sdk-ts/) — Full TypeDoc documentation
 - [Brand Kit](https://tachibtc.github.io/tachi-sdk-ts/brand-kit.html) — Logos, colours, typography, and assets
 
+> Docs site source lives in [tachibtc/tachi-docs-website](https://github.com/tachibtc/tachi-docs-website), not this repo.
+
 > **Note:** Transaction hex strings do **not** use a `0x` prefix (e.g. `"deadbeef"`, not `"0xdeadbeef"`).
 
 ### Methods
