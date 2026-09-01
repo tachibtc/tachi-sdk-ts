@@ -6,4 +6,5 @@ dist/
 *.claude
 *.db
 *.swarm
+.DS_Store
 
