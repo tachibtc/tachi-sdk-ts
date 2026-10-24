@@ -155,7 +155,7 @@ do {
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `baseUrl` | `string` | — | Base URL of the Tachi daemon RPC |
+| `baseUrl` | `string` | — | Base URL of the Tachi daemon RPC. A path prefix (e.g. `https://host/rpc`) is preserved on every request |
 | `fetch` | `fetch` | `globalThis.fetch` | Custom fetch implementation |
 | `timeoutMs` | `number` | `30000` | Per-request timeout in ms. `0` disables |
 | `maxResponseBytes` | `number` | `67108864` (64 MiB) | Reject responses larger than this. `0` disables |

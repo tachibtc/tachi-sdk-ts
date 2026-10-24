@@ -105,7 +105,12 @@ function pageQuery(params?: PageParams): Record<string, string> {
 }
 
 export interface TachiClientOptions {
-  /** Base URL of the Tachi daemon RPC (e.g. "https://rpc-regtest.tachibtc.com" or "https://rpc-signet.tachibtc.com"). */
+  /**
+   * Base URL of the Tachi daemon RPC (e.g. "https://rpc-regtest.tachibtc.com"
+   * or "https://rpc-signet.tachibtc.com"). A path prefix is supported and
+   * preserved on every request (e.g. "https://host/rpc" for a daemon mounted
+   * behind a reverse-proxy subpath).
+   */
   baseUrl: string;
   /** Optional custom fetch implementation (defaults to global fetch). */
   fetch?: typeof globalThis.fetch;
@@ -145,6 +150,20 @@ export class TachiClient {
     this.fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.maxResponseBytes = options.maxResponseBytes ?? 64 * 1024 * 1024;
+  }
+
+  /**
+   * Resolve a route against `baseUrl`, preserving any path prefix.
+   *
+   * Routes are joined relatively (`tachi_status` -> `<base>/tachi_status`)
+   * so a daemon behind a reverse-proxy subpath (`https://host/rpc`) keeps
+   * working. Joining host-absolute (`/tachi_status`) silently sends every
+   * call to the host root, where a *different* daemon may be mounted — the
+   * broadcast routes then reach the wrong daemon and report its success
+   * (issue #75).
+   */
+  private routeUrl(path: string): URL {
+    return new URL(path.replace(/^\/+/, ""), `${this.baseUrl}/`);
   }
 
   private get signal(): AbortSignal | undefined {
@@ -257,7 +276,7 @@ export class TachiClient {
     params?: Record<string, string>,
     headers?: Record<string, string>,
   ): Promise<T> {
-    const url = new URL(path, this.baseUrl);
+    const url = this.routeUrl(path);
     if (params) {
       for (const [k, v] of Object.entries(params)) {
         if (v !== undefined) url.searchParams.set(k, v);
@@ -270,7 +289,7 @@ export class TachiClient {
 
   private async post<T>(path: string, body?: unknown): Promise<T> {
     const res = await this.request(
-      new URL(path, this.baseUrl).toString(),
+      this.routeUrl(path).toString(),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -824,7 +843,7 @@ export class TachiClient {
       );
     }
 
-    const url = new URL("/tachi_ws", this.baseUrl);
+    const url = this.routeUrl("tachi_ws");
     url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
     url.search = qs.toString();
 

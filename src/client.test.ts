@@ -762,4 +762,62 @@ describe("TachiClient", () => {
       assert.equal(instances[0].closed, true);
     });
   });
+
+  describe("baseUrl path prefixes", () => {
+    const mockFor = (baseUrl: string) => {
+      const mock = createMockFetch({ status: "ok", validators: 1 });
+      const client = new TachiClient({ baseUrl, fetch: mock.fn });
+      return { client, calls: mock.calls };
+    };
+
+    it("preserves a path prefix on GET routes", async () => {
+      const { client, calls } = mockFor("https://host/rpc");
+      await client.getHealth();
+      assert.equal(calls[0].input, "https://host/rpc/health");
+    });
+
+    it("preserves a path prefix on POST routes (the broadcast path)", async () => {
+      const { client, calls } = mockFor("https://host/rpc");
+      await client.broadcastTxSync({ tx: "00" });
+      assert.equal(calls[0].input, "https://host/rpc/tachi_txBroadcastSync");
+    });
+
+    it("preserves a path prefix on the WebSocket URL", async () => {
+      const { client } = mockFor("https://host/rpc");
+      const urls: string[] = [];
+      class FakeWS {
+        onclose?: (ev: unknown) => void;
+        constructor(url: string | URL) {
+          urls.push(String(url));
+          setTimeout(() => this.onclose?.({}), 5);
+        }
+      }
+      const ac = new AbortController();
+      const stream = client.watch(
+        { blocks: true },
+        { WebSocket: FakeWS as unknown as typeof globalThis.WebSocket, signal: ac.signal },
+      );
+      queueMicrotask(() => ac.abort());
+      await stream.next().catch(() => {});
+      assert.equal(urls[0], "wss://host/rpc/tachi_ws?blocks=true");
+    });
+
+    it("normalizes nested and trailing-slash baseUrls the same way", async () => {
+      for (const base of ["https://host/a/b/", "https://host/a/b"]) {
+        const { client, calls } = mockFor(base);
+        await client.getHealth();
+        assert.equal(calls[0].input, "https://host/a/b/health");
+      }
+    });
+
+    it("keeps root-served baseUrls byte-identical to previous behavior", async () => {
+      for (const base of ["https://example.com", "https://example.com/"]) {
+        const { client, calls } = mockFor(base);
+        await client.getHealth();
+        await client.broadcastTxSync({ tx: "00" });
+        assert.equal(calls[0].input, "https://example.com/health");
+        assert.equal(calls[1].input, "https://example.com/tachi_txBroadcastSync");
+      }
+    });
+  });
 });
