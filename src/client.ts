@@ -41,6 +41,9 @@ import type {
   WatchtowerStatus,
   RefundTx,
   SignTransactionResponse,
+  TransferTx,
+  TransferCosignResponse,
+  ChainHealthResponse,
   WatchFilters,
   TachiEvent,
 } from "./types";
@@ -288,6 +291,19 @@ export class TachiClient {
   /** Liveness probe returning daemon status and validator count. */
   async getHealth(): Promise<HealthResponse> {
     return this.get("/health");
+  }
+
+  /**
+   * Chain health: is the node committing blocks and within its memory
+   * threshold (`GET /health/chain`).
+   *
+   * The alerting companion to {@link getHealth}: `problems` lists why the
+   * node is unhealthy (`status` flips to "unhealthy"), and an unhealthy node
+   * answers 503 with this same body, so treat a thrown error as "unhealthy",
+   * not "unknown".
+   */
+  async getChainHealth(): Promise<ChainHealthResponse> {
+    return this.get("/health/chain");
   }
 
   /** Node info, sync status, and latest block height (via CometBFT). */
@@ -753,6 +769,23 @@ export class TachiClient {
    */
   async signTransaction(refund: RefundTx): Promise<SignTransactionResponse> {
     return this.post("/tachi_signTransaction", refund);
+  }
+
+  /**
+   * Ask the daemon to quorum-co-sign a transfer that spends your VTXOs to a
+   * caller-chosen destination (`POST /tachi_signTransfer`).
+   *
+   * Same wire shape as {@link signTransaction}, except `outputs[0]` may be
+   * any destination rather than the vault's to_local, and the constraints
+   * are stricter: every output must be >= 330 sats, `inputs[0].sequence` and
+   * `locktime` must encode the vault's latest state hint, and every VTXO
+   * locked to the vault must belong to its owner. Regtest only.
+   *
+   * Returns 503 if refund signing or transfers are disabled on the daemon,
+   * or 504 if the signing threshold is not reached in time.
+   */
+  async signTransfer(transfer: TransferTx): Promise<TransferCosignResponse> {
+    return this.post("/tachi_signTransfer", transfer);
   }
 
   // ── Real-time events ─────────────────────────────────────────────

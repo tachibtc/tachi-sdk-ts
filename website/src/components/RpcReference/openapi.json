@@ -2198,6 +2198,90 @@
           }
         }
       }
+    },
+    "/tachi_signTransfer": {
+      "post": {
+        "description": "Fans a PSBT-shaped transfer (which must carry the owner's userSig over the tx) out to the vault's signing quorum and returns it with the collected tapScriptSig partials attached. Regtest only: every output must be >= 330 sats, inputs[0].sequence and locktime must encode the vault's latest state hint, and every VTXO locked to the vault must belong to its owner.",
+        "consumes": [
+          "application/json"
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Refund"
+        ],
+        "summary": "Cooperatively sign a VTXO transfer",
+        "parameters": [
+          {
+            "description": "PSBT-shaped transfer transaction",
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/github_com_tachibtc_daemon_vault_refund.RefundTx"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.TransferCosignResponse"
+            }
+          },
+          "400": {
+            "description": "invalid transfer or unsatisfiable constraints",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "405": {
+            "description": "method not allowed",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "503": {
+            "description": "refund signing or transfers are disabled on the daemon",
+            "schema": {
+              "$ref": "#/definitions/rpc.TransferCosignResponse"
+            }
+          },
+          "504": {
+            "description": "the signing threshold was not reached in time",
+            "schema": {
+              "$ref": "#/definitions/rpc.TransferCosignResponse"
+            }
+          }
+        }
+      }
+    },
+    "/health/chain": {
+      "get": {
+        "description": "Chain health: reports whether the node is committing blocks and within its memory threshold. Meant for alerting, not liveness: an unhealthy node answers 503, in which case the decoded body is still returned.",
+        "produces": [
+          "application/json"
+        ],
+        "tags": [
+          "Health"
+        ],
+        "summary": "Chain health",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": {
+              "$ref": "#/definitions/rpc.ChainHealthResponse"
+            }
+          },
+          "503": {
+            "description": "unhealthy node (the decoded ChainHealthResponse body is still returned)",
+            "schema": {
+              "$ref": "#/definitions/rpc.ChainHealthResponse"
+            }
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -2881,6 +2965,48 @@
         }
       }
     },
+    "rpc.ChainHealthResponse": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "description": "\"ok\", or \"unhealthy\" when any problem is listed.",
+          "type": "string",
+          "example": "ok"
+        },
+        "problems": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Why the node is unhealthy; empty when healthy."
+        },
+        "height": {
+          "description": "Last block this node committed (0 before the first).",
+          "type": "integer",
+          "example": 1315640
+        },
+        "last_block_age_seconds": {
+          "description": "Seconds since this node last committed a block.",
+          "type": "integer",
+          "example": 3
+        },
+        "max_block_age_seconds": {
+          "description": "Threshold for last_block_age_seconds.",
+          "type": "integer",
+          "example": 3
+        },
+        "memory_bytes": {
+          "description": "Memory the daemon's Go runtime has mapped from the OS.",
+          "type": "integer",
+          "example": 3
+        },
+        "max_memory_bytes": {
+          "description": "Threshold for memory_bytes; 0 = not checked.",
+          "type": "integer",
+          "example": 3
+        }
+      }
+    },
     "rpc.ListBlocksResponse": {
       "type": "object",
       "properties": {
@@ -3328,6 +3454,24 @@
           "description": "Signatures is the number of quorum partial signatures collected.",
           "type": "integer",
           "example": 5
+        }
+      }
+    },
+    "rpc.TransferCosignResponse": {
+      "type": "object",
+      "properties": {
+        "signatures": {
+          "description": "The number of quorum partial signatures collected.",
+          "type": "integer",
+          "example": 5
+        },
+        "transfer": {
+          "description": "The transfer transaction with the quorum partial signatures attached.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/github_com_tachibtc_daemon_vault_refund.RefundTx"
+            }
+          ]
         }
       }
     },

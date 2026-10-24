@@ -107,7 +107,7 @@ console.log(info.result);
 
 > **Note:** every endpoint except `/health` and the Bitcoin RPC proxy is namespaced under `tachi_`. SDK versions before 0.2.0 used unprefixed paths and will 404 against current daemons.
 
-This covers all 47 daemon routes except `POST /tachi_validators/register`, which is documented below.
+This covers every daemon route except `POST /tachi_validators/register`, which is documented below.
 
 ### Live events
 

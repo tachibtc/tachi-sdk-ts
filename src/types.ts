@@ -4,6 +4,30 @@ export interface HealthResponse {
   validators: number;
 }
 
+/**
+ * Response from GET /health/chain.
+ *
+ * The deeper chain-health check behind the Go SDK's Node.ChainHealth: is the
+ * node committing blocks and within its memory threshold. An unhealthy node
+ * answers 503 with this same body shape.
+ */
+export interface ChainHealthResponse {
+  /** "ok", or "unhealthy" when any problem is listed. */
+  status: string;
+  /** Why the node is unhealthy; empty when healthy. */
+  problems: string[];
+  /** Last block this node committed (0 before the first). */
+  height: number;
+  /** Seconds since this node last committed a block. */
+  last_block_age_seconds: number;
+  /** Threshold for `last_block_age_seconds`. */
+  max_block_age_seconds: number;
+  /** Memory the daemon's Go runtime has mapped from the OS. */
+  memory_bytes: number;
+  /** Threshold for `memory_bytes`; 0 = not checked. */
+  max_memory_bytes: number;
+}
+
 /** Information about a single validator/peer. */
 export interface ValidatorInfo {
   peer_id: string;
@@ -536,6 +560,25 @@ export interface SignTransactionResponse {
   /** The refund transaction with daemon signatures attached. */
   refund: RefundTx;
   /** Number of signatures the daemon contributed. */
+  signatures: number;
+}
+
+/**
+ * Request body for /tachi_signTransfer.
+ *
+ * Same wire shape as RefundTx, except outputs[0] may be any caller-chosen
+ * destination rather than the vault's to_local. Regtest only: every output
+ * must be >= 330 sats, inputs[0].sequence and locktime must encode the
+ * vault's latest state hint, and every VTXO locked to the vault must belong
+ * to its owner.
+ */
+export type TransferTx = RefundTx;
+
+/** Response from /tachi_signTransfer. */
+export interface TransferCosignResponse {
+  /** The transfer transaction with quorum partial signatures attached. */
+  transfer: TransferTx;
+  /** Number of quorum partial signatures collected. */
   signatures: number;
 }
 

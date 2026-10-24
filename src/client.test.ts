@@ -762,4 +762,44 @@ describe("TachiClient", () => {
       assert.equal(instances[0].closed, true);
     });
   });
+
+  describe("signTransfer", () => {
+    it("calls POST /tachi_signTransfer and returns TransferCosignResponse", async () => {
+      const transfer = {
+        version: 2,
+        locktime: 5,
+        inputs: [],
+        outputs: [],
+        userSig: "aabb",
+      };
+      const { client, calls } = makeClient({ transfer, signatures: 5 });
+      const result = await client.signTransfer(transfer);
+      assert.deepEqual(result, { transfer, signatures: 5 });
+      assert.ok(calls[0].input.endsWith("/tachi_signTransfer"));
+      assert.equal(calls[0].init?.method, "POST");
+      assert.equal(
+        calls[0].init?.body,
+        JSON.stringify(transfer),
+        "request body must be the transfer transaction",
+      );
+    });
+  });
+
+  describe("getChainHealth", () => {
+    it("calls GET /health/chain and returns ChainHealthResponse", async () => {
+      const body = {
+        status: "ok",
+        problems: [],
+        height: 1315640,
+        last_block_age_seconds: 1.24,
+        max_block_age_seconds: 300,
+        memory_bytes: 858872280,
+        max_memory_bytes: 0,
+      };
+      const { client, calls } = makeClient(body);
+      const result = await client.getChainHealth();
+      assert.deepEqual(result, body);
+      assert.ok(calls[0].input.endsWith("/health/chain"));
+    });
+  });
 });

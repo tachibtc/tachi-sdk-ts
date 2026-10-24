@@ -2,6 +2,7 @@ export { TachiClient } from "./client";
 export type { TachiClientOptions } from "./client";
 export type {
   HealthResponse,
+  ChainHealthResponse,
   ValidatorInfo,
   ValidatorsResponse,
   ValidatorCountResponse,
@@ -56,6 +57,8 @@ export type {
   TapScriptSig,
   RefundTx,
   SignTransactionResponse,
+  TransferTx,
+  TransferCosignResponse,
   WatchFilters,
   TachiEvent,
 } from "./types";
