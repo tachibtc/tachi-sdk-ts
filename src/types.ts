@@ -415,8 +415,13 @@ export interface GetEpochResponse {
   hat_count: number;
   /** Null until the epoch is anchored to a Bitcoin block. */
   bitcoin_block_height: number | null;
-  /** Hex L1 settlement txid; empty until the epoch settles. */
-  l1_settlement_txid: string;
+  /**
+   * Hex L1 settlement txid. Reserved field: L1 settlement is not implemented
+   * yet and no code path writes it, so the daemon omits this key entirely
+   * (`omitempty` on the Go side) until it lands. Check with `!== undefined`,
+   * not for empty string.
+   */
+  l1_settlement_txid?: string;
 }
 
 /** Response from /tachi_listEpochs. */
