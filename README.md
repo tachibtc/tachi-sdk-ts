@@ -178,6 +178,7 @@ const me = evmAddressFromPubKey(pubKey); // your msg.sender
 
 // 1. Size the gas: simulate the deploy and add headroom.
 const sim = await client.evmCall({ from: me, data: initCode });
+if (sim.status !== 1) throw new Error(sim.error ?? "init code reverted"); // don't pay for a deploy that fails
 const gasLimit = BigInt(Math.ceil(sim.gas_used * 1.2));
 
 // 2. Build, sign and send. Inputs must cover the outputs plus maxGasFeeSats.
@@ -188,10 +189,22 @@ const deploy = buildDeployTx({
 });
 console.log("sets aside", maxGasFeeSats(deploy), "sats for gas");
 const signed = await signEVMTx(deploy, signer);
-await client.sendEvmTx(signed);
+const sent = await client.sendEvmTx(signed);
+const checkTx = sent.result as { code: number; log: string };
+if (checkTx.code !== 0) throw new Error(`CheckTx rejected: ${checkTx.log}`);
 
-// 3. Once it is in a block, read the receipt.
-const receipt = await client.getEvmReceipt(await evmTxHash(signed));
+// 3. Wait for it to land in a block, then read the receipt. getEvmReceipt
+//    rejects until the transaction has been applied.
+const hash = await evmTxHash(signed);
+let receipt;
+for (let tries = 0; !receipt; tries++) {
+  try {
+    receipt = await client.getEvmReceipt(hash);
+  } catch (err) {
+    if (tries >= 30) throw err;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
 if (receipt.status !== 1) throw new Error(receipt.error);
 const token = receipt.contract_address; // also contractAddress(me, nonce)
 

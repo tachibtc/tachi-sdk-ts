@@ -174,6 +174,7 @@ export function maxGasFeeSats(tx: Pick<EVMTx, "gasLimit" | "gasPrice">): bigint 
  * hashes it.
  */
 export function encodeEVMTx(tx: EVMTx, forSigning = false): Uint8Array {
+  if (tx.nonce < 0n || tx.nonce > MAX_U64) throw new Error("nonce must be a uint64");
   const w = new Writer();
   w.u8(TX_VERSION).u8(tx.type).u16(tx.inputs.length);
   for (const id of tx.inputs) {
@@ -209,16 +210,27 @@ export async function evmSigHash(tx: EVMTx): Promise<Uint8Array> {
 
 /** Returns a copy of `tx` signed with `signer`. */
 export async function signEVMTx(tx: EVMTx, signer: EVMSigner): Promise<EVMTx> {
-  const signature = await signer(await evmSigHash(tx));
+  // Sign and return a copy, so changes to `tx` while an async signer runs
+  // cannot leave the signature over different bytes than the result.
+  const snapshot: EVMTx = {
+    ...tx,
+    inputs: tx.inputs.map((id) => Uint8Array.from(id)),
+    outputs: tx.outputs.map((out) => ({ owner: Uint8Array.from(out.owner), amount: out.amount })),
+    pubKey: Uint8Array.from(tx.pubKey),
+    to: Uint8Array.from(tx.to),
+    data: Uint8Array.from(tx.data),
+  };
+  const signature = await signer(await evmSigHash(snapshot));
   if (!(signature instanceof Uint8Array) || signature.length !== 64) {
     throw new Error("signer must return a 64-byte BIP-340 signature");
   }
-  return { ...tx, signature: Uint8Array.from(signature) };
+  return { ...snapshot, signature: Uint8Array.from(signature) };
 }
 
 /** Hex of a signed transaction, for `broadcastTxSync` and `validateTransaction`. */
 export function evmTxHex(tx: EVMTx): string {
   if (!tx.signature) throw new Error("transaction is not signed; call signEVMTx first");
+  if (tx.signature.length !== 64) throw new Error("signature must be a 64-byte BIP-340 signature");
   return bytesToHex(encodeEVMTx(tx));
 }
 
@@ -240,6 +252,7 @@ export async function refundVtxoId(tx: EVMTx): Promise<string> {
 /** ID of the VTXO at `index` among those the transaction creates. */
 export async function vtxoId(tx: EVMTx, index: number): Promise<string> {
   if (!tx.signature) throw new Error("transaction is not signed; call signEVMTx first");
+  if (!Number.isInteger(index) || index < 0 || index > 0xffffffff) throw new Error("index must be a uint32");
   const hash = await sha256(encodeEVMTx(tx));
   return bytesToHex(await sha256(new Writer().bytes(hash).u32(index).finish()));
 }
@@ -247,10 +260,14 @@ export async function vtxoId(tx: EVMTx, index: number): Promise<string> {
 // ── EVM addresses ──────────────────────────────────────────────────
 
 /**
- * The EVM address (`msg.sender`) of a Tachi key: the standard Ethereum
- * address of the same secp256k1 key, so it matches what Ethereum wallets show
- * for it. Takes a 32-byte x-only key, a 33-byte compressed key or a 65-byte
- * uncompressed key. Returns 0x-prefixed lowercase hex.
+ * The EVM address of a secp256k1 public key, as 0x-prefixed lowercase hex.
+ *
+ * Pass a Tachi 32-byte x-only key to get its `msg.sender`. An x-only key has
+ * an even Y by definition (BIP-340), and the daemon derives `msg.sender` from
+ * exactly that. If your private key's public point has an odd Y, an Ethereum
+ * wallet shows a different address for the same private key (the one this
+ * returns for the 33-byte compressed key); on Tachi, `msg.sender` is still the
+ * even-Y one. A 65-byte uncompressed key is also accepted.
  */
 export function evmAddressFromPubKey(pubKey: BytesLike): string {
   const key = toBytes(pubKey, "pubKey");
@@ -258,11 +275,16 @@ export function evmAddressFromPubKey(pubKey: BytesLike): string {
   if (key.length === 65) {
     if (key[0] !== 0x04) throw new Error("uncompressed key must start with 0x04");
     xy = key.subarray(1);
+    const x = bytesToBigInt(xy.subarray(0, 32));
+    const y = bytesToBigInt(xy.subarray(32));
+    if (x >= P || y >= P || (y * y) % P !== (modPow(x, 3n, P) + 7n) % P) {
+      throw new Error("public key is not on secp256k1");
+    }
   } else if (key.length === 32 || key.length === 33) {
     // An x-only key has an even Y by definition (BIP-340).
     const odd = key.length === 33 ? parity(key[0]) : false;
     const x = bytesToBigInt(key.subarray(key.length - 32));
-    xy = concat(bigIntToBytes(x, 32), bigIntToBytes(liftX(x, odd), 32));
+    xy = concat([bigIntToBytes(x, 32), bigIntToBytes(liftX(x, odd), 32)]);
   } else {
     throw new Error(`pubKey is ${key.length} bytes, want 32 (x-only), 33 or 65`);
   }
@@ -279,9 +301,9 @@ export function contractAddress(deployer: BytesLike, nonce: bigint): string {
   if (addr.length !== 20) throw new Error("deployer must be a 20-byte address");
   if (nonce < 0n || nonce > MAX_U64) throw new Error("nonce must be a uint64");
   const n = nonce === 0n ? new Uint8Array(0) : bigIntToBytes(nonce, Math.ceil(nonce.toString(16).length / 2));
-  const nonceRLP = n.length === 1 && n[0] < 0x80 ? n : concat(Uint8Array.of(0x80 + n.length), n);
-  const payload = concat(Uint8Array.of(0x80 + 20), addr, nonceRLP);
-  return "0x" + bytesToHex(keccak256(concat(Uint8Array.of(0xc0 + payload.length), payload)).subarray(12));
+  const nonceRLP = n.length === 1 && n[0] < 0x80 ? n : concat([Uint8Array.of(0x80 + n.length), n]);
+  const payload = concat([Uint8Array.of(0x80 + 20), addr, nonceRLP]);
+  return "0x" + bytesToHex(keccak256(concat([Uint8Array.of(0xc0 + payload.length), payload])).subarray(12));
 }
 
 function parity(prefix: number): boolean {
@@ -413,7 +435,7 @@ function bigIntToBytes(v: bigint, len: number): Uint8Array {
   return toBytes(v.toString(16).padStart(len * 2, "0"));
 }
 
-function concat(...parts: Uint8Array[]): Uint8Array {
+function concat(parts: Uint8Array[]): Uint8Array {
   const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
   let off = 0;
   for (const p of parts) {
@@ -426,6 +448,9 @@ function concat(...parts: Uint8Array[]): Uint8Array {
 class Writer {
   private parts: Uint8Array[] = [];
   private num(n: number | bigint, size: 1 | 2 | 4 | 8): this {
+    // DataView would silently wrap an out-of-range value; refuse it instead.
+    const value = BigInt(n);
+    if (value < 0n || value >= 1n << BigInt(size * 8)) throw new Error(`value ${value} does not fit in ${size * 8} bits`);
     const b = new Uint8Array(size);
     const v = new DataView(b.buffer);
     if (size === 1) v.setUint8(0, Number(n));
@@ -453,6 +478,6 @@ class Writer {
     return this;
   }
   finish(): Uint8Array {
-    return concat(...this.parts);
+    return concat(this.parts);
   }
 }

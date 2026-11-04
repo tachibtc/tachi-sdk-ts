@@ -16,6 +16,7 @@ import {
   maxGasFeeSats,
   refundVtxoId,
   signEVMTx,
+  vtxoId,
   type EVMTx,
 } from "./evm";
 
@@ -91,10 +92,10 @@ describe("EVM addresses", () => {
   it("keccak256 matches known digests", () => {
     assert.equal(bytesToHex(keccak256(new Uint8Array(0))), "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
     assert.equal(bytesToHex(keccak256(new TextEncoder().encode("abc"))), "4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45");
-    // Crosses the 136-byte block boundary.
+    // Crosses the 136-byte block boundary; digest from @noble/hashes.
     assert.equal(
       bytesToHex(keccak256(new Uint8Array(200).fill(0x61))),
-      bytesToHex(keccak256(new TextEncoder().encode("a".repeat(200)))),
+      "96ea54061def936c4be90b518992fdc6f12f535068a256229aca54267b4d084d",
     );
   });
 
@@ -109,6 +110,14 @@ describe("EVM addresses", () => {
   it("rejects keys that are not on the curve or the wrong size", () => {
     assert.throws(() => evmAddressFromPubKey("00".repeat(32)), /not on secp256k1/);
     assert.throws(() => evmAddressFromPubKey("00".repeat(31)), /want 32/);
+    assert.throws(() => evmAddressFromPubKey("04" + "01".repeat(64)), /not on secp256k1/);
+  });
+
+  it("accepts an uncompressed key, and an odd-Y compressed key differs from x-only", () => {
+    const gx = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+    const gy = "483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8";
+    assert.equal(evmAddressFromPubKey("04" + gx + gy), "0x7e5f4552091a69125d5dfcb7b8c2659029395bdf");
+    assert.notEqual(evmAddressFromPubKey("03" + gx), evmAddressFromPubKey(gx));
   });
 
   it("derives contract addresses like CREATE", () => {
@@ -138,6 +147,25 @@ describe("EVM transaction validation", () => {
 
   it("rejects a signer that does not return 64 bytes", async () => {
     await assert.rejects(signEVMTx(deployTx(), () => new Uint8Array(32)), /64-byte/);
+  });
+
+  it("refuses values that do not fit their wire field", async () => {
+    assert.throws(() => encodeEVMTx({ ...deployTx(), nonce: -1n }), /nonce/);
+    assert.throws(() => encodeEVMTx({ ...deployTx(), gasLimit: 1n << 64n }), /does not fit/);
+    const signed = await signEVMTx(deployTx(), vectorSigner(DEPLOY));
+    assert.throws(() => evmTxHex({ ...signed, signature: new Uint8Array(63) }), /64-byte/);
+    await assert.rejects(vtxoId(signed, -1), /uint32/);
+    await assert.rejects(vtxoId(signed, 2 ** 32), /uint32/);
+  });
+
+  it("signs a snapshot, so edits during an async signer do not leak into the result", async () => {
+    const tx = deployTx();
+    const signed = await signEVMTx(tx, async (sigHash) => {
+      tx.data[0] ^= 0xff;
+      tx.nonce = 9n;
+      return vectorSigner(DEPLOY)(sigHash);
+    });
+    assert.equal(evmTxHex(signed), DEPLOY.hex);
   });
 });
 
