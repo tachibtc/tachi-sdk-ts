@@ -52,6 +52,8 @@ console.log(info.result);
 - [API Reference](https://tachibtc.github.io/tachi-sdk-ts/) — Full TypeDoc documentation
 - [Brand Kit](https://tachibtc.github.io/tachi-sdk-ts/brand-kit.html) — Logos, colours, typography, and assets
 
+> Docs site source lives in [tachibtc/tachi-docs-website](https://github.com/tachibtc/tachi-docs-website), not this repo.
+
 > **Note:** Transaction hex strings do **not** use a `0x` prefix (e.g. `"deadbeef"`, not `"0xdeadbeef"`).
 
 ### Methods
@@ -103,11 +105,16 @@ console.log(info.result);
 | `getWatchtowerStatus()` | `GET /tachi_watchtower/status` | Watchtower mode & scan progress |
 | `getWatchtowerReceipts(opts?)` | `GET /tachi_watchtower/receipts` | Observed L1 vault spends |
 | `signTransaction(refund)` | `POST /tachi_signTransaction` | Quorum co-sign a vault refund |
+| `evmCall(request)` | `POST /tachi_evmCall` | Read-only EVM call, or deploy gas estimate |
+| `getEvmCode(address)` | `GET /tachi_evmCode` | Runtime code at an EVM address |
+| `getEvmReceipt(hash)` | `GET /tachi_evmReceipt` | Receipt of a deploy or call |
+| `getEvmNonce(pubKey)` | `GET /tachi_nonce` | Nonce to sign the next EVM tx with |
+| `sendEvmTx(tx)` | `POST /tachi_txBroadcastSync` | Broadcast a signed EVM tx |
 | `watch(filters, opts?)` | `WS /tachi_ws` | Live event stream |
 
 > **Note:** every endpoint except `/health` and the Bitcoin RPC proxy is namespaced under `tachi_`. SDK versions before 0.2.0 used unprefixed paths and will 404 against current daemons.
 
-This covers all 47 daemon routes except `POST /tachi_validators/register`, which is documented below.
+This covers all 50 daemon routes except `POST /tachi_validators/register`, which is documented below.
 
 ### Live events
 
@@ -150,6 +157,58 @@ do {
   cursor = page.next_before_height || undefined;
 } while (cursor);
 ```
+
+### EVM contracts
+
+Contracts run on the EVM. A `TxDeploy` or `TxCall` spends your VTXOs to pay for gas. You set aside `gasLimit` at `gasPrice` (in millisats per gas), and whatever goes unused comes back to you as a refund VTXO.
+
+The SDK builds, encodes and hashes these transactions without any runtime dependencies. Signing is up to you: pass any BIP-340 Schnorr signer. This example uses `@noble/curves`:
+
+```ts
+import { schnorr } from "@noble/curves/secp256k1";
+import {
+  TachiClient, buildDeployTx, buildCallTx, signEVMTx, evmTxHash,
+  evmAddressFromPubKey, contractAddress, maxGasFeeSats,
+} from "@tachibtc/tachi-sdk-ts";
+
+const client = new TachiClient({ baseUrl: "http://127.0.0.1:26670" });
+const pubKey = Buffer.from(schnorr.getPublicKey(privateKey)).toString("hex");
+const signer = (sigHash: Uint8Array) => schnorr.sign(sigHash, privateKey);
+const me = evmAddressFromPubKey(pubKey); // your msg.sender
+
+// 1. Size the gas: simulate the deploy and add headroom.
+const sim = await client.evmCall({ from: me, data: initCode });
+const gasLimit = BigInt(Math.ceil(sim.gas_used * 1.2));
+
+// 2. Build, sign and send. Inputs must cover the outputs plus maxGasFeeSats.
+const nonce = await client.getEvmNonce(pubKey);
+const deploy = buildDeployTx({
+  inputs: [vtxoId], outputs: [{ owner: pubKey, amount: change }],
+  pubKey, nonce, gasLimit, gasPrice: 1n, initCode,
+});
+console.log("sets aside", maxGasFeeSats(deploy), "sats for gas");
+const signed = await signEVMTx(deploy, signer);
+await client.sendEvmTx(signed);
+
+// 3. Once it is in a block, read the receipt.
+const receipt = await client.getEvmReceipt(await evmTxHash(signed));
+if (receipt.status !== 1) throw new Error(receipt.error);
+const token = receipt.contract_address; // also contractAddress(me, nonce)
+
+// Calls work the same way with buildCallTx({ ..., to: token, data }).
+// Reads need no transaction:
+const res = await client.evmCall({ from: me, to: token, data: balanceOfCalldata });
+```
+
+Use any ABI library (viem, ethers) to build `initCode` and calldata, and to decode `return_data` and logs.
+
+Things to know:
+
+- **Status 0 still costs you.** A reverted or out-of-gas transaction still applied: its inputs were spent, its gas was charged and its nonce was used. Always check the receipt's `status`, not just the broadcast result code. A failed deploy still reports a `contract_address`.
+- **The refund VTXO is not in `outputs`.** It sits at the output index right after your outputs. `refundVtxoId(signed)` gives its ID. It only exists if some gas went unused.
+- **Use `getEvmNonce`.** It returns the nonce to sign with. The raw `/tachi_nonce` response also has a `next_nonce` field, which is one higher, so don't sign with that.
+- **No native BTC in contracts yet.** Every balance reads zero, and any call or deploy that sends value fails. Tokens like ERC-20 keep their balances in contract storage, so they work fine.
+- The EVM chain ID is `EVM_CHAIN_ID` (`0x54434849`). Use it in EIP-712 domains.
 
 ### Client options
 

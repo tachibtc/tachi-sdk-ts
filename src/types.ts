@@ -570,3 +570,54 @@ export interface TachiEvent {
   event: string;
   [key: string]: unknown;
 }
+
+/** Body of POST /tachi_evmCall. Hex fields take an optional 0x prefix. */
+export interface EVMCallRequest {
+  /** Caller address (`msg.sender`); zero address if omitted. */
+  from?: string;
+  /** Contract to call. Omit to simulate deploying `data` as init code. */
+  to?: string;
+  /** Calldata, or init code when `to` is omitted. */
+  data: string;
+  /** Gas limit; defaults to and is capped at 1,000,000. */
+  gas?: number;
+}
+
+/** An event emitted during EVM execution. Hex fields are 0x-prefixed. */
+export interface EVMLog {
+  address: string;
+  topics: string[];
+  data: string;
+}
+
+/**
+ * Receipt of an applied TxDeploy or TxCall, from /tachi_evmReceipt.
+ *
+ * `status` 0 still means the transaction applied: its inputs were spent, its
+ * gas was charged and its nonce used. Check `status`, not the broadcast
+ * result code alone.
+ */
+export interface EVMReceipt {
+  /** 1 for success, 0 for a revert or other failure. */
+  status: 0 | 1;
+  /** Gas charged, after refunds. */
+  gas_used: number;
+  /** The deployed contract, for a deploy. Set even when the deploy failed. */
+  contract_address?: string;
+  /** Return data, or the revert payload on failure. */
+  return_data?: string;
+  /** Events emitted; empty when `status` is 0. */
+  logs: EVMLog[];
+  /** Why execution failed; absent on success. */
+  error?: string;
+}
+
+/** Result of POST /tachi_evmCall. Nothing is committed. */
+export type EVMCallResult = Omit<EVMReceipt, "contract_address">;
+
+/** Response from /tachi_evmCode. */
+export interface EVMCodeResponse {
+  address: string;
+  /** Runtime bytecode, or "0x" if there is no contract at the address. */
+  code: string;
+}

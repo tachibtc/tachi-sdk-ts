@@ -1,6 +1,6 @@
 {
   "name": "@tachibtc/tachi-sdk-ts",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "TypeScript SDK for Tachi BTC daemon RPC",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc",
     "docs": "typedoc",
-    "test": "node --import tsx --test src/client.test.ts",
+    "test": "node --import tsx --test src/client.test.ts src/evm.test.ts",
     "prepublishOnly": "npm run build",
     "lint": "eslint ."
   },
