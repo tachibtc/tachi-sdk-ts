@@ -43,7 +43,12 @@ import type {
   SignTransactionResponse,
   WatchFilters,
   TachiEvent,
+  EVMCallRequest,
+  EVMCallResult,
+  EVMCodeResponse,
+  EVMReceipt,
 } from "./types";
+import { evmTxHex, type EVMTx } from "./evm";
 
 /** Cap on how much of a daemon error body is quoted back in a thrown Error. */
 const ERROR_BODY_MAX_CHARS = 500;
@@ -719,6 +724,61 @@ export class TachiClient {
   /** Validator voting power distribution (via CometBFT). */
   async getValidatorsPower(): Promise<CometRPCResponse> {
     return this.get("/tachi_validatorsPower");
+  }
+
+  // ── EVM ──────────────────────────────────────────────────────────
+
+  /**
+   * Read-only EVM call against committed state, like `eth_call`. Nothing is
+   * committed. Omit `to` to simulate deploying `data` and read its gas use,
+   * which is how to size `gasLimit` for a deploy (add some headroom: gas
+   * refunds can make `gas_used` lower than the limit execution needed).
+   *
+   * A failed call resolves with `status` 0; the promise only rejects on an
+   * HTTP-level failure or a malformed request.
+   */
+  async evmCall(request: EVMCallRequest): Promise<EVMCallResult> {
+    return this.post("/tachi_evmCall", request);
+  }
+
+  /** Runtime bytecode at an EVM address ("0x" if there is no contract). */
+  async getEvmCode(address: string): Promise<EVMCodeResponse> {
+    return this.get("/tachi_evmCode", { address });
+  }
+
+  /**
+   * Receipt of a TxDeploy or TxCall by transaction hash (see `evmTxHash`).
+   * Rejects if the transaction has not been applied yet.
+   */
+  async getEvmReceipt(hash: string): Promise<EVMReceipt> {
+    return this.get("/tachi_evmReceipt", { hash });
+  }
+
+  /**
+   * The nonce the sender's next EVM transaction must use.
+   *
+   * This is the `nonce` field of `/tachi_nonce`, not `next_nonce`: the daemon
+   * stores the next expected nonce, so `next_nonce` is one too high for
+   * signing.
+   *
+   * @param pubKey - Sender's 32-byte x-only public key, hex.
+   */
+  async getEvmNonce(pubKey: string): Promise<bigint> {
+    const res = await this.getNonce(pubKey);
+    const nonce = res.nonce;
+    if (typeof nonce !== "number" && typeof nonce !== "string") {
+      throw new Error("GET /tachi_nonce: response has no nonce");
+    }
+    return BigInt(nonce);
+  }
+
+  /**
+   * Broadcast a signed EVM transaction and wait for CheckTx. A zero code
+   * means it entered the mempool; read the outcome from `getEvmReceipt`
+   * once it is in a block.
+   */
+  async sendEvmTx(tx: EVMTx): Promise<CometRPCResponse> {
+    return this.broadcastTxSync(evmTxHex(tx));
   }
 
   // ── Watchtower ───────────────────────────────────────────────────
