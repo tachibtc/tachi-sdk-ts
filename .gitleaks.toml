@@ -1,0 +1,15 @@
+# gitleaks reads this file from the repo root. It keeps every default rule
+# and only allowlists known false positives.
+
+title = "tachi-sdk-ts"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public test vectors, not secrets"
+# x-only public key of the test private key 0x11 repeated 32 times, used as
+# PUBKEY in src/evm.test.ts. generic-api-key matches it by variable name.
+# Allowlisted by value, not by commit fingerprint: CI scans the PR merge
+# commit, whose hash changes on every push, so a fingerprint would not hold.
+regexes = ['''4f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa''']
